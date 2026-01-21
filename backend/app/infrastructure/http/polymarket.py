@@ -13,6 +13,12 @@ from app.infrastructure.http.cache import polymarket_cache
 from app.infrastructure.http.resilience import polymarket_circuit, with_async_retry
 
 logger = get_logger(__name__)
+def _safe_error_message(exc: Exception) -> str:
+    try:
+        return str(exc)
+    except Exception:
+        return repr(exc)
+
 
 GAMMA_API = PolymarketAPI.GAMMA_API
 CLOB_API = PolymarketAPI.CLOB_API
@@ -66,7 +72,11 @@ async def fetch_json_async(
         return result
     except Exception as e:
         polymarket_circuit.record_failure()
-        logger.warning("Failed to fetch from Polymarket API (async)", url=url, error=str(e))
+        logger.warning(
+            "Failed to fetch from Polymarket API (async)",
+            url=url,
+            error=_safe_error_message(e),
+        )
         raise
 
 

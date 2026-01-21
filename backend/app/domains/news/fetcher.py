@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from app.config import get_logger
 from app.domains.news.query_generator import TavilyQuerySpec
-from app.infrastructure.http import search_news
+from app.infrastructure.http.tavily import search_news
 
 logger = get_logger(__name__)
 

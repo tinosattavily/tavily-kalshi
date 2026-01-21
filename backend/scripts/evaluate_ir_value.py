@@ -16,7 +16,7 @@ from typing import Any
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.db.async_repositories import runs_collection_async
+from app.infrastructure.database.repositories import runs_collection_async
 
 
 async def load_runs_with_outcomes() -> list[dict[str, Any]]:

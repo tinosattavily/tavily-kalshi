@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
 
     // Add timeout to prevent hanging requests (10 seconds for starting analysis)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), 10000);
     
     try {
       const response = await fetch(`${getBackendUrl()}/api/analyze/start`, {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
         signal: controller.signal,
       });
       
-      clearTimeout(timeoutId);
+      globalThis.clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorData = await parseErrorResponse(response);
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     
       return NextResponse.json(data);
     } catch (error) {
-      clearTimeout(timeoutId);
+      globalThis.clearTimeout(timeoutId);
       // Handle abort/timeout errors gracefully
       if (error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted"))) {
         logger.warn("Request to backend timed out or was aborted");

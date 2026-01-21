@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-
 SYSTEM_PROMPT = (
     "You are writing a concise trade note for a prediction market. "
     "You will receive structured data about the market, model signal, "

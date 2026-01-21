@@ -216,6 +216,10 @@ class MarketService:
         if event_image:
             event_state["image"] = event_image
             logger.debug("Fetched image from Polymarket", image_url=event_image)
+        elif event:
+            fallback_image = event.get("image") or event.get("icon")
+            if fallback_image and "image" not in event_state:
+                event_state["image"] = fallback_image
 
         if event:
             if "title" in event:

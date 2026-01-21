@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Tuple
+from typing import Literal, Tuple
 
 from app.config import get_logger
 from app.shared.types import StrategyParams

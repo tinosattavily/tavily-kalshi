@@ -167,7 +167,7 @@ Return a JSON object with the following keys:
         except Exception as exc:
             openai_circuit.record_failure()
             logger.warning("OpenAI call failed", error=str(exc), exc_info=True)
-            raise
+            raise RuntimeError("OpenAI API error") from exc
 
     async def generate_signal(
         self,

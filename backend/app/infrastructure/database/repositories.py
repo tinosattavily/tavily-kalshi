@@ -157,7 +157,7 @@ async def get_run_async(run_id: str) -> Optional[Dict[str, Any]]:
 
         logger = get_logger(__name__)
         logger.error("Error retrieving run", run_id=run_id, error=str(e), exc_info=True)
-        raise
+        raise RuntimeError("Failed to retrieve run") from e
 
 
 async def list_runs_by_market_async(market_id: str) -> List[Dict[str, Any]]:

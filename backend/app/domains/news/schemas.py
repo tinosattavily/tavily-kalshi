@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TavilyRawArticle(BaseModel):
@@ -49,8 +49,7 @@ class TavilySearchResponse(BaseModel):
     response_time: Optional[float] = None
     images: Optional[List[str]] = Field(None, description="Related images")
 
-    class Config:
-        extra = "allow"  # Allow extra fields from API that we don't model
+    model_config = ConfigDict(extra="allow")  # Allow extra fields from API
 
 
 class TavilyArticle(BaseModel):

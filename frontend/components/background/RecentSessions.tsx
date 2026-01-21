@@ -35,7 +35,7 @@ export default function RecentSessions({
     setError(null);
     
     // Add timeout to prevent hanging requests (30 seconds)
-    const timeoutId = setTimeout(() => {
+    const timeoutId = globalThis.setTimeout(() => {
       if (!abortController.signal.aborted) {
         abortController.abort();
       }
@@ -46,7 +46,7 @@ export default function RecentSessions({
         signal: abortController.signal,
       });
       
-      clearTimeout(timeoutId);
+      globalThis.clearTimeout(timeoutId);
       
       // Check if request was aborted before processing response
       if (abortController.signal.aborted) {
@@ -55,11 +55,19 @@ export default function RecentSessions({
       
       if (!response.ok) {
         // Try to parse error response, but handle cases where response body might be empty
-        let errorData: any = {};
+        let errorData: {
+          detail?: string;
+          error?: string;
+          message?: string;
+        } = {};
         try {
           const text = await response.text();
           if (text) {
-            errorData = JSON.parse(text);
+            errorData = JSON.parse(text) as {
+              detail?: string;
+              error?: string;
+              message?: string;
+            };
           }
         } catch {
           // If parsing fails, use status text or default message
@@ -84,7 +92,7 @@ export default function RecentSessions({
       }
     } catch (err) {
       // Clear timeout if error occurs
-      clearTimeout(timeoutId);
+      globalThis.clearTimeout(timeoutId);
       // Check if request was aborted - this includes AbortError and DOMException with "terminated" message
       if (
         abortController.signal.aborted ||
@@ -93,7 +101,7 @@ export default function RecentSessions({
           err.message === "terminated" ||
           err.message.includes("aborted")
         )) ||
-        (err instanceof DOMException && err.name === "AbortError")
+        (err instanceof globalThis.DOMException && err.name === "AbortError")
       ) {
         // Silently ignore abort errors
         return;

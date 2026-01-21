@@ -161,6 +161,13 @@ def with_circuit_breaker(circuit: CircuitBreaker):
     return decorator
 
 
+def _safe_error_message(exc: Exception) -> str:
+    try:
+        return str(exc)
+    except Exception:
+        return repr(exc)
+
+
 async def with_async_retry(
     func: AsyncF,
     max_attempts: int = 3,
@@ -173,6 +180,8 @@ async def with_async_retry(
     attempt = 0
     last_exception: Exception | None = None
 
+    function_name = getattr(func, "__name__", func.__class__.__name__)
+
     while attempt < max_attempts:
         try:
             return await func(*args, **kwargs)
@@ -182,20 +191,20 @@ async def with_async_retry(
             if attempt >= max_attempts:
                 logger.error(
                     "Max retry attempts reached",
-                    function=func.__name__,
+                    function=function_name,
                     attempts=attempt,
-                    error=str(e),
+                    error=_safe_error_message(e),
                 )
                 raise
 
             delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
             logger.warning(
                 "Retrying after failure",
-                function=func.__name__,
+                function=function_name,
                 attempt=attempt,
                 max_attempts=max_attempts,
                 delay=delay,
-                error=str(e),
+                error=_safe_error_message(e),
             )
             await asyncio.sleep(delay)
 

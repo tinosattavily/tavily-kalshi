@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from app.config import get_logger
 from app.domains.analysis.calculations import (
@@ -35,7 +35,7 @@ def create_fallback_signal(
     Returns:
         Fallback Signal model
     """
-    default_delta = 0.07
+    default_delta = 0.03
     p_model = clamp_prob(p_mkt + default_delta)
     edge, ev = compute_edge_and_ev(p_model, p_mkt)
     kelly_yes = kelly_fraction_yes(p_model, p_mkt)

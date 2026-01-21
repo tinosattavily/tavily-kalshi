@@ -1,6 +1,5 @@
 /** @jest-environment jsdom */
 import React from "react";
-import { render, screen } from "@testing-library/react";
 import RootLayout from "../../app/layout";
 
 // Mock next/font/google
@@ -15,58 +14,46 @@ jest.mock("next/font/google", () => ({
 jest.mock("../../app/globals.css", () => ({}));
 
 describe("RootLayout", () => {
+  const renderLayout = (children: React.ReactNode) =>
+    RootLayout({ children }) as React.ReactElement;
+
+  const getBodyElement = (layout: React.ReactElement) =>
+    layout.props.children as React.ReactElement;
+
   test("renders html element with lang attribute", () => {
-    render(
-      <RootLayout>
-        <div>Test Content</div>
-      </RootLayout>
-    );
-    // In jsdom, html and body are rendered as document.documentElement and document.body
-    const htmlElement = document.documentElement;
-    expect(htmlElement).not.toBeNull();
-    expect(htmlElement).toHaveAttribute("lang", "en");
+    const layout = renderLayout(<div>Test Content</div>);
+    expect(layout.type).toBe("html");
+    expect(layout.props.lang).toBe("en");
   });
 
   test("renders body element with font class", () => {
-    render(
-      <RootLayout>
-        <div>Test Content</div>
-      </RootLayout>
-    );
-    // In jsdom, body is rendered as document.body
-    const bodyElement = document.body;
-    expect(bodyElement).not.toBeNull();
-    expect(bodyElement).toHaveClass("inter-font-class");
+    const layout = renderLayout(<div>Test Content</div>);
+    const bodyElement = getBodyElement(layout);
+    expect(bodyElement.type).toBe("body");
+    expect(bodyElement.props.className).toBe("inter-font-class");
   });
 
   test("renders children", () => {
-    render(
-      <RootLayout>
-        <div data-testid="child">Test Content</div>
-      </RootLayout>
-    );
-    expect(screen.getByTestId("child")).toBeInTheDocument();
-    expect(screen.getByText("Test Content")).toBeInTheDocument();
+    const child = <div data-testid="child">Test Content</div>;
+    const layout = renderLayout(child);
+    const bodyElement = getBodyElement(layout);
+    expect(bodyElement.props.children).toEqual(child);
   });
 
   test("renders multiple children", () => {
-    render(
-      <RootLayout>
-        <div data-testid="child1">Child 1</div>
-        <div data-testid="child2">Child 2</div>
-      </RootLayout>
-    );
-    expect(screen.getByTestId("child1")).toBeInTheDocument();
-    expect(screen.getByTestId("child2")).toBeInTheDocument();
+    const children = [
+      <div key="child1" data-testid="child1">Child 1</div>,
+      <div key="child2" data-testid="child2">Child 2</div>,
+    ];
+    const layout = renderLayout(children);
+    const bodyElement = getBodyElement(layout);
+    expect(bodyElement.props.children).toEqual(children);
   });
 
   test("renders empty children", () => {
-    render(<RootLayout>{null}</RootLayout>);
-    // In jsdom, body is rendered as document.body
-    const bodyElement = document.body;
-    expect(bodyElement).not.toBeNull();
-    // Body might have some default content in jsdom, so just check it exists
-    expect(bodyElement).toBeInTheDocument();
+    const layout = renderLayout(null);
+    const bodyElement = getBodyElement(layout);
+    expect(bodyElement.props.children).toBeNull();
   });
 
   test("has correct metadata", () => {
@@ -76,23 +63,14 @@ describe("RootLayout", () => {
   });
 
   test("renders without errors", () => {
-    const { container } = render(
-      <RootLayout>
-        <div>Test</div>
-      </RootLayout>
-    );
-    expect(container).toBeTruthy();
-    expect(container.firstChild).not.toBeNull();
+    const layout = renderLayout(<div>Test</div>);
+    expect(layout).toBeTruthy();
   });
 
   test("applies Inter font configuration", () => {
     // eslint-disable-next-line no-undef
     const { Inter } = require("next/font/google");
-    render(
-      <RootLayout>
-        <div>Test</div>
-      </RootLayout>
-    );
+    renderLayout(<div>Test</div>);
     expect(Inter).toHaveBeenCalledWith({
       subsets: ["latin"],
       display: "swap",
@@ -100,8 +78,8 @@ describe("RootLayout", () => {
   });
 
   test("renders complex children structure", () => {
-    render(
-      <RootLayout>
+    const children = (
+      <>
         <header>
           <h1>Header</h1>
         </header>
@@ -111,11 +89,11 @@ describe("RootLayout", () => {
         <footer>
           <p>Footer</p>
         </footer>
-      </RootLayout>
+      </>
     );
-    expect(screen.getByText("Header")).toBeInTheDocument();
-    expect(screen.getByText("Main content")).toBeInTheDocument();
-    expect(screen.getByText("Footer")).toBeInTheDocument();
+    const layout = renderLayout(children);
+    const bodyElement = getBodyElement(layout);
+    expect(bodyElement.props.children).toEqual(children);
   });
 });
 

@@ -23,7 +23,7 @@ export async function GET(
 
     // Add timeout to prevent hanging requests (60 seconds for run status checks)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), 60000);
     
     try {
       const response = await fetch(
@@ -37,7 +37,7 @@ export async function GET(
         },
       );
       
-      clearTimeout(timeoutId);
+      globalThis.clearTimeout(timeoutId);
 
     if (!response.ok) {
       // Propagate backend error shape to the client, similar to /analyze/start
@@ -59,7 +59,7 @@ export async function GET(
       const data = await response.json();
       return NextResponse.json(data);
     } catch (error) {
-      clearTimeout(timeoutId);
+      globalThis.clearTimeout(timeoutId);
       // Handle abort/timeout errors gracefully
       if (error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted"))) {
         logger.warn("Request to backend timed out or was aborted", run_id);

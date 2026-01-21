@@ -9,9 +9,9 @@ import aiohttp
 from aiohttp import ClientTimeout
 
 from app.config import get_logger, settings
+from app.domains.news.schemas import TavilySearchResult
 from app.infrastructure.http.cache import tavily_cache
 from app.infrastructure.http.resilience import tavily_circuit, with_async_retry
-from app.schemas.tavily import TavilySearchResult
 
 logger = get_logger(__name__)
 
@@ -70,9 +70,14 @@ async def _search_news_impl_async(
                 error_details = {}
                 try:
                     import json
+
                     error_details = json.loads(response_text) if response_text else {}
                 except Exception:
-                    error_details = {"raw_response": response_text[:500] if response_text else "Empty response"}
+                    error_details = {
+                        "raw_response": response_text[:500]
+                        if response_text
+                        else "Empty response",
+                    }
 
                 # Log detailed error information
                 logger.error(
@@ -93,10 +98,14 @@ async def _search_news_impl_async(
                         or error_details.get("detail")
                         or "Unknown error (HTTP 432)"
                     )
+                    response_preview = (
+                        response_text[:500] if response_text else "Empty response"
+                    )
                     raise ValueError(
                         f"Tavily API error 432: {error_msg}. "
-                        "This usually indicates an invalid API key, expired subscription, rate limit exceeded, or account issue. "
-                        f"Response body: {response_text[:500] if response_text else 'Empty response'}"
+                        "This usually indicates an invalid API key, expired subscription, "
+                        "rate limit exceeded, or account issue. "
+                        f"Response body: {response_preview}"
                     )
 
                 # Raise with more context for other errors
@@ -129,14 +138,6 @@ async def search_news(
         Dictionary with answer and articles (for backward compatibility with TypedDict usage)
         Articles are Pydantic models converted to dicts
     """
-    if not TAVILY_API_KEY:
-        # Fail soft: let the caller fall back to placeholder content.
-        logger.warning(
-            "TAVILY_API_KEY not configured - Tavily searches will return empty results",
-            query=query,
-        )
-        return {"answer": "", "articles": []}
-
     # Create cache key (include search_depth for future cache differentiation)
     cache_key = f"tavily:{query}:{max_results}:{search_depth or 'basic'}"
 
@@ -163,6 +164,12 @@ async def search_news(
                 ],
             }
         return cached_result
+
+    if not TAVILY_API_KEY:
+        logger.warning(
+            "TAVILY_API_KEY not configured - Tavily searches will return empty results",
+            query=query,
+        )
 
     # Check circuit breaker
     if not tavily_circuit.can_attempt():

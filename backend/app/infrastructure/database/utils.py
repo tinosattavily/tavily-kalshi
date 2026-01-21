@@ -7,6 +7,28 @@ from typing import Any
 from bson import ObjectId
 
 
+def ensure_object_id(value: Any) -> ObjectId:
+    """Ensure a value is a valid ObjectId instance.
+
+    Args:
+        value: ObjectId or string value.
+
+    Returns:
+        ObjectId instance.
+
+    Raises:
+        ValueError: If value cannot be converted to ObjectId.
+    """
+    if isinstance(value, ObjectId):
+        return value
+    if isinstance(value, str):
+        try:
+            return ObjectId(value)
+        except Exception as exc:
+            raise ValueError("Invalid ObjectId string.") from exc
+    raise ValueError("Value must be an ObjectId or ObjectId string.")
+
+
 def serialize_document(doc: Any) -> Any:
     """Recursively serialize MongoDB documents, converting ObjectIds to strings.
 

@@ -5,14 +5,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.api import (
-    AnalyzeRequest,
-    ErrorResponse,
-    HealthResponse,
-    MarketSelectionResponse,
-    ReportSection,
-    Signal,
-)
+from app.api.schemas.common import ErrorResponse, HealthResponse
+from app.api.schemas.requests import AnalyzeRequest
+from app.api.schemas.responses import MarketSelectionResponse
+from app.domains.analysis.schemas import Signal
+from app.domains.reports.schemas import ReportSection
 
 
 def test_signal_validation():

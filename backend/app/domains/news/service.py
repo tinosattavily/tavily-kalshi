@@ -19,7 +19,6 @@ from app.domains.news.query_generator import (
 )
 from app.domains.news.sentiment import analyze_articles_sentiment
 from app.domains.news.summarizer import (
-    generate_fallback_summary,
     generate_no_articles_summary,
     summarize_news,
 )

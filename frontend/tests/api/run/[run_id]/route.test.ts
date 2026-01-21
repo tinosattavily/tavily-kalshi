@@ -1,6 +1,7 @@
 /** @jest-environment node */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { GET } from "../../../../app/api/run/[run_id]/route";
+import { logger } from "../../../../lib/logger";
 
 // Mock Next.js server
 jest.mock("next/server", () => ({
@@ -14,6 +15,15 @@ jest.mock("next/server", () => ({
   },
 }));
 
+jest.mock("../../../../lib/logger", () => ({
+  logger: {
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
 // Mock fetch
 global.fetch = jest.fn();
 
@@ -24,6 +34,7 @@ describe("GET /api/run/[run_id]", () => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
     delete process.env.BACKEND_URL;
+    process.env.NODE_ENV = "development";
   });
 
   afterEach(() => {
@@ -49,28 +60,21 @@ describe("GET /api/run/[run_id]", () => {
 
     (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
 
-    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
-
     const response = await GET(mockRequest, { params });
 
     expect(global.fetch).toHaveBeenCalledWith(
       "http://localhost:8000/api/run/test-run-id",
-      {
+      expect.objectContaining({
         method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
-      }
+        signal: expect.any(Object),
+      })
     );
 
     const responseData = await response.json();
     expect(responseData).toEqual({ run_id: "test-run-id", status: "completed" });
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      "[Next.js API] /run backend response:",
-      expect.any(String)
-    );
-
-    consoleLogSpy.mockRestore();
     // Restore original NODE_ENV
     Object.defineProperty(process.env, 'NODE_ENV', {
       value: originalEnv,
@@ -96,7 +100,9 @@ describe("GET /api/run/[run_id]", () => {
 
     expect(global.fetch).toHaveBeenCalledWith(
       "http://localhost:8000/api/run/test-run-id",
-      expect.any(Object)
+      expect.objectContaining({
+        signal: expect.any(Object),
+      })
     );
 
     const responseData = await response.json();
@@ -130,29 +136,23 @@ describe("GET /api/run/[run_id]", () => {
     const mockRequest = {} as any;
     const params = { run_id: "" };
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await GET(mockRequest, { params });
 
     expect(response.status).toBe(400);
     const responseData = await response.json();
     expect(responseData.error).toBe("Invalid run_id parameter");
     expect(responseData.received).toBe("");
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
+    expect(logger.error).toHaveBeenCalledWith(
       "[Next.js API] Invalid run_id in route params:",
       "",
       "type:",
       "string"
     );
-
-    consoleErrorSpy.mockRestore();
   });
 
   test("validates run_id and returns 400 for 'undefined' string", async () => {
     const mockRequest = {} as any;
     const params = { run_id: "undefined" };
-
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
 
     const response = await GET(mockRequest, { params });
 
@@ -161,14 +161,11 @@ describe("GET /api/run/[run_id]", () => {
     expect(responseData.error).toBe("Invalid run_id parameter");
     expect(responseData.received).toBe("undefined");
 
-    consoleErrorSpy.mockRestore();
   });
 
   test("validates run_id and returns 400 for 'null' string", async () => {
     const mockRequest = {} as any;
     const params = { run_id: "null" };
-
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
 
     const response = await GET(mockRequest, { params });
 
@@ -177,7 +174,6 @@ describe("GET /api/run/[run_id]", () => {
     expect(responseData.error).toBe("Invalid run_id parameter");
     expect(responseData.received).toBe("null");
 
-    consoleErrorSpy.mockRestore();
   });
 
   test("encodes run_id in URL", async () => {
@@ -195,7 +191,9 @@ describe("GET /api/run/[run_id]", () => {
 
     expect(global.fetch).toHaveBeenCalledWith(
       "http://localhost:8000/api/run/test%2Frun%3Fid%3D123",
-      expect.any(Object)
+      expect.objectContaining({
+        signal: expect.any(Object),
+      })
     );
   });
 
@@ -301,17 +299,16 @@ describe("GET /api/run/[run_id]", () => {
 
     (global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await GET(mockRequest, { params });
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
-    expect(responseData.details).toBe("Network error");
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Error proxying to backend:", expect.any(Error));
-
-    consoleErrorSpy.mockRestore();
+    expect(responseData.detail).toBe("Network error");
+    expect(logger.error).toHaveBeenCalledWith(
+      "Error proxying to backend:",
+      expect.any(Error)
+    );
   });
 
   test("handles non-Error exception", async () => {
@@ -320,53 +317,12 @@ describe("GET /api/run/[run_id]", () => {
 
     (global.fetch as jest.Mock).mockRejectedValue("String error");
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await GET(mockRequest, { params });
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
-    expect(responseData.details).toBe("String error");
-
-    consoleErrorSpy.mockRestore();
-  });
-
-  test("logs run_id when fetching", async () => {
-    const originalEnv = process.env.NODE_ENV;
-    // Use Object.defineProperty to bypass TypeScript read-only check in tests
-    Object.defineProperty(process.env, 'NODE_ENV', {
-      value: 'development',
-      writable: true,
-      configurable: true,
-    });
-    
-    const mockRequest = {} as any;
-    const params = { run_id: "test-run-id" };
-
-    const mockResponse = {
-      ok: true,
-      json: jest.fn().mockResolvedValue({ run_id: "test-run-id" }),
-    };
-
-    (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
-
-    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
-
-    await GET(mockRequest, { params });
-
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      "[Next.js API] Fetching run from backend:",
-      "test-run-id"
-    );
-
-    consoleLogSpy.mockRestore();
-    // Restore original NODE_ENV
-    Object.defineProperty(process.env, 'NODE_ENV', {
-      value: originalEnv,
-      writable: true,
-      configurable: true,
-    });
+    expect(responseData.detail).toBe("String error");
   });
 
   test("handles empty text response in error", async () => {

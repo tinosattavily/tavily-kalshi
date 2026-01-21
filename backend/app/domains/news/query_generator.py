@@ -9,6 +9,7 @@ import json
 from typing import Any, Dict, List, Literal, Optional, TypedDict
 
 from app.config import get_logger
+from app.infrastructure.llm import get_openai_client
 
 logger = get_logger(__name__)
 
@@ -234,15 +235,9 @@ async def generate_search_queries(
     """
     from app.infrastructure.http.cache import openai_cache
     from app.infrastructure.http.resilience import openai_circuit
-    from app.infrastructure.llm import get_openai_client
 
     if openai is None:
         logger.warning("OpenAI not available")
-        return []
-
-    openai_client = get_openai_client()
-    if not openai_client.api_key:
-        logger.warning("OPENAI_API_KEY not configured")
         return []
 
     # Build prompt
@@ -264,6 +259,16 @@ async def generate_search_queries(
     if cached_result is not None:
         logger.debug("Cache hit for Tavily query generation")
         return parse_tavily_specs(cached_result)
+
+    try:
+        openai_client = get_openai_client()
+    except Exception as exc:
+        logger.warning("OpenAI not available", error=str(exc))
+        return []
+
+    if not openai_client.api_key:
+        logger.warning("OPENAI_API_KEY not configured")
+        return []
 
     # Check circuit breaker
     if not openai_circuit.can_attempt():

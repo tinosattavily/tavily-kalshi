@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.schemas.tavily import (
+from app.domains.news.schemas import (
     TavilyArticle,
     TavilyRawArticle,
     TavilySearchResponse,

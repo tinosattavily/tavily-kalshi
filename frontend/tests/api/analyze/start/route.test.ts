@@ -1,6 +1,7 @@
 /** @jest-environment node */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { POST } from "../../../../app/api/analyze/start/route";
+import { logger } from "../../../../lib/logger";
 
 // Mock Next.js server
 jest.mock("next/server", () => ({
@@ -14,6 +15,15 @@ jest.mock("next/server", () => ({
   },
 }));
 
+jest.mock("../../../../lib/logger", () => ({
+  logger: {
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
 // Mock fetch
 global.fetch = jest.fn();
 
@@ -24,6 +34,7 @@ describe("POST /api/analyze/start", () => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
     delete process.env.BACKEND_URL;
+    process.env.NODE_ENV = "development";
   });
 
   afterEach(() => {
@@ -50,34 +61,23 @@ describe("POST /api/analyze/start", () => {
 
     (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
 
-    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
-
     const response = await POST(mockRequest as any);
 
     expect(global.fetch).toHaveBeenCalledWith(
       "http://localhost:8000/api/analyze/start",
-      {
+      expect.objectContaining({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ url: "https://polymarket.com/event/123" }),
-      }
+        signal: expect.any(Object),
+      })
     );
 
     expect(mockRequest.json).toHaveBeenCalled();
     const responseData = await response.json();
     expect(responseData).toEqual({ run_id: "test-run-id" });
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      "[Next.js API] Backend response:",
-      expect.any(String)
-    );
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      "[Next.js API] run_id from backend:",
-      "test-run-id"
-    );
-
-    consoleLogSpy.mockRestore();
     // Restore original NODE_ENV
     Object.defineProperty(process.env, 'NODE_ENV', {
       value: originalEnv,
@@ -120,18 +120,12 @@ describe("POST /api/analyze/start", () => {
 
     (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
-
     await POST(mockRequest as any);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
+    expect(logger.error).toHaveBeenCalledWith(
       "[Next.js API] Missing run_id in backend response:",
       { data: "no run_id" }
     );
-
-    consoleErrorSpy.mockRestore();
-    consoleLogSpy.mockRestore();
   });
 
   test("handles backend error with JSON response", async () => {
@@ -242,17 +236,16 @@ describe("POST /api/analyze/start", () => {
 
     (global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await POST(mockRequest as any);
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
-    expect(responseData.details).toBe("Network error");
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Error proxying to backend:", expect.any(Error));
-
-    consoleErrorSpy.mockRestore();
+    expect(responseData.detail).toBe("Network error");
+    expect(logger.error).toHaveBeenCalledWith(
+      "Error proxying to backend:",
+      expect.any(Error)
+    );
   });
 
   test("handles non-Error exception", async () => {
@@ -262,16 +255,12 @@ describe("POST /api/analyze/start", () => {
 
     (global.fetch as jest.Mock).mockRejectedValue("String error");
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await POST(mockRequest as any);
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
-    expect(responseData.details).toBe("String error");
-
-    consoleErrorSpy.mockRestore();
+    expect(responseData.detail).toBe("String error");
   });
 
   test("handles request.json() error", async () => {

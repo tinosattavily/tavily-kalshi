@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # ---------- Nested helper models ----------
 
@@ -146,9 +146,7 @@ class Market(BaseModel):
     # Nested events (from /markets?slug=...)
     events: Optional[List["Event"]] = None
 
-    class Config:
-        # Allow extra fields from API that we don't model
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")  # Allow extra API fields
 
 
 class Event(BaseModel):
@@ -211,9 +209,7 @@ class Event(BaseModel):
     markets: Optional[List[Market]] = None  # present on /events?slug=...
     tags: Optional[List[Tag]] = None  # present on /events?slug=...
 
-    class Config:
-        # Allow extra fields from API that we don't model
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")  # Allow extra API fields
 
 
 # Resolve forward references for Pydantic v2

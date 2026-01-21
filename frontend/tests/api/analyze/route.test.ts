@@ -24,6 +24,7 @@ describe("POST /api/analyze", () => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
     delete process.env.BACKEND_URL;
+    process.env.NODE_ENV = "development";
   });
 
   afterEach(() => {
@@ -45,7 +46,7 @@ describe("POST /api/analyze", () => {
     const response = await POST(mockRequest as any);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://localhost:8000/api/analyze",
+      "http://localhost:8000/api/analyze/start",
       {
         method: "POST",
         headers: {
@@ -77,7 +78,7 @@ describe("POST /api/analyze", () => {
     await POST(mockRequest as any);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "https://api.example.com/api/analyze",
+      "https://api.example.com/api/analyze/start",
       expect.any(Object)
     );
   });
@@ -212,17 +213,12 @@ describe("POST /api/analyze", () => {
 
     (global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await POST(mockRequest as any);
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
-    expect(responseData.details).toBe("Network error");
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Error proxying to backend:", expect.any(Error));
-
-    consoleErrorSpy.mockRestore();
+    expect(responseData.detail).toBe("Network error");
   });
 
   test("handles non-Error exception", async () => {
@@ -232,16 +228,12 @@ describe("POST /api/analyze", () => {
 
     (global.fetch as jest.Mock).mockRejectedValue("String error");
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await POST(mockRequest as any);
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
-    expect(responseData.details).toBe("String error");
-
-    consoleErrorSpy.mockRestore();
+    expect(responseData.detail).toBe("String error");
   });
 
   test("handles request.json() error", async () => {

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from app.core.sentiment_analyzer import analyze_article_sentiment, analyze_articles_sentiment
+from app.domains.news.sentiment.analyzer import (
+    analyze_article_sentiment,
+    analyze_articles_sentiment,
+)
 
 
 def test_analyze_article_sentiment_bullish_keywords():

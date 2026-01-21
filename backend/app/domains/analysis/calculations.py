@@ -152,8 +152,8 @@ def estimate_confidence(
     elif total_articles == 1:
         score = 0.3
     elif total_articles < 5:
-        # Scale linearly from 0.3 to 0.5 for 1-4 articles
-        score = 0.3 + (total_articles - 1) * (0.5 - 0.3) / 3
+        # Scale linearly from 0.4 to 0.55 for 2-4 articles
+        score = 0.4 + (total_articles - 2) * (0.55 - 0.4) / 2
     elif total_articles < 15:
         # Scale linearly from 0.5 to 0.8 for 5-14 articles
         score = 0.5 + (total_articles - 5) * (0.8 - 0.5) / 9
@@ -196,7 +196,8 @@ def estimate_confidence(
         # More diverse sources = higher confidence
         unique_sources = len(sources)
         if unique_sources > 5:
-            score = min(1.0, score * 1.1)  # Boost by 10% cap
+            # Strong boost for diverse sources
+            score = max(score * 1.1, 0.7)
         elif unique_sources < 2 and total_articles > 5:
             score *= 0.9  # Penalize if many articles but few sources
 

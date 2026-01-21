@@ -4,6 +4,11 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Background from "../components/Background";
 
+jest.mock("../components/background/RecentSessions", () => ({
+  __esModule: true,
+  default: () => <div data-testid="recent-sessions" />,
+}));
+
 // Mock Next.js router
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -659,7 +664,7 @@ describe("Background Component", () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/min/i)).toBeInTheDocument();
+      expect(screen.getByText(/Closes in .*min/i)).toBeInTheDocument();
     }, { timeout: 3000 });
   });
 
@@ -692,7 +697,7 @@ describe("Background Component", () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/hr/i)).toBeInTheDocument();
+      expect(screen.getByText(/Closes in .*hr/i)).toBeInTheDocument();
     }, { timeout: 3000 });
   });
 
