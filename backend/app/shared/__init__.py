@@ -1,0 +1,68 @@
+# app/shared/__init__.py
+"""Shared module exports."""
+
+from app.shared.exceptions import (
+    ConfigurationError,
+    DatabaseError,
+    ExternalAPIError,
+    MarketSelectionRequiredError,
+    OpenAIAPIError,
+    PolymarketAPIError,
+    ProphilyError,
+    TavilyAPIError,
+    ValidationError,
+)
+from app.shared.types import (
+    ConfidenceLevel,
+    Decision,
+    DecisionAction,
+    EventContext,
+    EventDocument,
+    Horizon,
+    MarketDocument,
+    MarketSnapshot,
+    NewsArticle,
+    NewsContext,
+    ReportBlock,
+    RunDocument,
+    RunEnvMetadata,
+    RunStatus,
+    Signal,
+    SignalDirection,
+    StrategyParams,
+    StrategyPreset,
+    TraceDocument,
+)
+
+__all__ = [
+    # Exceptions
+    "ConfigurationError",
+    "DatabaseError",
+    "ExternalAPIError",
+    "MarketSelectionRequiredError",
+    "OpenAIAPIError",
+    "PolymarketAPIError",
+    "ProphilyError",
+    "TavilyAPIError",
+    "ValidationError",
+    # Types
+    "ConfidenceLevel",
+    "Decision",
+    "DecisionAction",
+    "EventContext",
+    "EventDocument",
+    "Horizon",
+    "MarketDocument",
+    "MarketSnapshot",
+    "NewsArticle",
+    "NewsContext",
+    "ReportBlock",
+    "RunDocument",
+    "RunEnvMetadata",
+    "RunStatus",
+    "Signal",
+    "SignalDirection",
+    "StrategyParams",
+    "StrategyPreset",
+    "TraceDocument",
+]
