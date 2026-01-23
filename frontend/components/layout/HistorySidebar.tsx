@@ -142,10 +142,10 @@ export default function HistorySidebar({
   return (
     <div
       id="recent-sessions"
-      className="h-full flex flex-col bg-white/90 border-0"
+      className="h-full flex flex-col bg-white/60 backdrop-blur-sm border-0"
     >
       {/* Header */}
-      <div className="p-4 bg-white/90">
+      <div className="p-4 bg-white/60 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-semibold text-neutral-800 flex items-center gap-2">
             <History className="w-5 h-5" />

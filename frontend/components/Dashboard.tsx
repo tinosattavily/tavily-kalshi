@@ -3,11 +3,10 @@
 import React, { PropsWithChildren, useCallback, useState } from "react";
 // Layout components
 import { AppShell } from "./layout/AppShell";
-import HistorySidebar from "./layout/HistorySidebar";
-import ConfigPanel, {
-  AnalysisConfiguration,
-  DEFAULT_CONFIG,
-} from "./layout/ConfigPanel";
+import HistorySidebarHeader from "./layout/HistorySidebarHeader";
+import HistorySidebarContent from "./layout/HistorySidebarContent";
+import ConfigPanelHeader from "./layout/ConfigPanelHeader";
+import ConfigPanelContent, { AnalysisConfiguration } from "./layout/ConfigPanelContent";
 import { RecentRun } from "./layout/HistoryCard";
 // Input components
 import UrlInput from "./input/UrlInput";
@@ -15,8 +14,17 @@ import UrlInput from "./input/UrlInput";
 import { AnalysisResultsView } from "./analysis/AnalysisResults";
 // Utilities
 import { useToast } from "./ui/Toast";
-import { useAnalysisPolling, useAnalysisSubmit, useRecentRuns } from "../hooks";
+import { useAnalysisPolling, useAnalysisSubmit, useRecentRuns, useRecentSessions } from "../hooks";
 import type { AnalysisResults, RunStatus } from "../types";
+
+const DEFAULT_CONFIG: AnalysisConfiguration = {
+  useTavilyPromptAgent: true,
+  useNewsSummaryAgent: true,
+  maxArticles: 15,
+  maxArticlesPerQuery: 8,
+  minConfidence: "medium",
+  enableSentimentAnalysis: true,
+};
 
 export default function Dashboard(_props: PropsWithChildren): React.JSX.Element {
   void _props;
@@ -38,6 +46,11 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
     { slug: string; question: string }[]
   >([]);
   const [recentSessionsRefreshTrigger, setRecentSessionsRefreshTrigger] = useState(0);
+
+  // Recent sessions hook
+  const { runs, isLoading: sessionsLoading, error: sessionsError, fetchRecentRuns } = useRecentSessions({
+    refreshTrigger: recentSessionsRefreshTrigger,
+  });
 
   // Polling hook
   const { runIdRef, startPolling, stopPolling } = useAnalysisPolling({
@@ -82,7 +95,7 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
     showToast,
   });
 
-  // Recent runs hook
+  // Recent runs hook (for selecting a run from history)
   const { handleRunSelect } = useRecentRuns({
     setSelectedRunId,
     setIsSubmitting,
@@ -125,40 +138,53 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
     }
   };
 
+  const handleResetConfig = useCallback(() => {
+    setConfiguration(DEFAULT_CONFIG);
+  }, []);
+
   return (
     <AppShell
-      sidebar={
-        <HistorySidebar
-          onRunSelect={handleRunSelect as (run: RecentRun) => void}
-          activeRunId={(selectedRunId || runId) ?? undefined}
-          refreshTrigger={recentSessionsRefreshTrigger}
+      sidebarHeader={
+        <HistorySidebarHeader
+          isLoading={sessionsLoading}
+          onRefresh={fetchRecentRuns}
         />
       }
-      rightPanel={
-        <ConfigPanel
+      sidebarContent={
+        <HistorySidebarContent
+          runs={runs}
+          isLoading={sessionsLoading}
+          error={sessionsError}
+          activeRunId={(selectedRunId || runId) ?? undefined}
+          onRunSelect={handleRunSelect as (run: RecentRun) => void}
+          onRetry={fetchRecentRuns}
+        />
+      }
+      urlInput={
+        <UrlInput
+          url={url}
+          isSubmitting={isSubmitting}
+          isFocused={isFocused}
+          onChange={setUrl}
+          onSubmit={handleSubmit}
+          onKeyDown={handleKeyDown}
+          onFocusChange={setIsFocused}
+        />
+      }
+      configHeader={
+        <ConfigPanelHeader
+          isSubmitting={isSubmitting}
+          onReset={handleResetConfig}
+        />
+      }
+      configContent={
+        <ConfigPanelContent
           config={configuration}
           onChange={setConfiguration}
           isSubmitting={isSubmitting}
         />
       }
     >
-      {/* Input Row */}
-      <div id="input-row" className="grid grid-cols-[1fr_2fr_1fr] border-b border-neutral-300">
-        <div className="p-4" />
-        <div className="p-4 border-x border-neutral-300" id="url-input-cell">
-          <UrlInput
-            url={url}
-            isSubmitting={isSubmitting}
-            isFocused={isFocused}
-            onChange={setUrl}
-            onSubmit={handleSubmit}
-            onKeyDown={handleKeyDown}
-            onFocusChange={setIsFocused}
-          />
-        </div>
-        <div className="p-4" />
-      </div>
-
       {/* Results Pane */}
       <div className="p-4" id="results-pane">
         <AnalysisResultsView

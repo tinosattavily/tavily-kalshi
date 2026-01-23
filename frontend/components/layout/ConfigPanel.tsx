@@ -52,10 +52,10 @@ export default function ConfigurationPanel({
   return (
     <div
       id="configuration-panel"
-      className="h-full flex flex-col bg-white/90 border-0"
+      className="h-full flex flex-col bg-white/60 backdrop-blur-sm border-0"
     >
       {/* Header */}
-      <div className="bg-white/90 p-4">
+      <div className="bg-white/60 backdrop-blur-sm p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-900 flex items-center gap-2">
             <svg
@@ -293,7 +293,7 @@ export default function ConfigurationPanel({
 
       {/* Footer with info */}
       {isExpanded && (
-        <div className="border-t border-neutral-300 bg-white/90 p-3">
+        <div className="border-t border-neutral-300 bg-white/60 backdrop-blur-sm p-3">
           <p className="text-xs text-neutral-500 text-center">
             Settings apply to the next analysis run
           </p>

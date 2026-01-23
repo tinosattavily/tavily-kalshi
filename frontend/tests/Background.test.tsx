@@ -5,9 +5,34 @@ import userEvent from "@testing-library/user-event";
 import Dashboard from "../components/Dashboard";
 import { TestWrapper } from "./utils/testWrapper";
 
-jest.mock("../components/layout/HistorySidebar", () => ({
+jest.mock("../components/layout/HistorySidebarHeader", () => ({
   __esModule: true,
-  default: () => <div data-testid="recent-sessions" />,
+  default: () => <div data-testid="recent-sessions-header" />,
+}));
+
+jest.mock("../components/layout/HistorySidebarContent", () => ({
+  __esModule: true,
+  default: () => <div data-testid="recent-sessions-content" />,
+}));
+
+jest.mock("../components/layout/ConfigPanelHeader", () => ({
+  __esModule: true,
+  default: () => <div data-testid="config-panel-header" />,
+}));
+
+jest.mock("../components/layout/ConfigPanelContent", () => ({
+  __esModule: true,
+  default: () => <div data-testid="config-panel-content" />,
+  AnalysisConfiguration: {},
+}));
+
+jest.mock("../hooks/useRecentSessions", () => ({
+  useRecentSessions: () => ({
+    runs: [],
+    isLoading: false,
+    error: null,
+    fetchRecentRuns: jest.fn(),
+  }),
 }));
 
 // Mock Next.js router

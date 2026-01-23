@@ -11,7 +11,7 @@ const courierPrime = Courier_Prime({
 
 export default function TopNav() {
   return (
-    <div id="top-nav" className="flex items-center justify-between border-y border-x border-neutral-300 bg-white/90 px-4">
+    <div id="top-nav" className="flex items-center justify-between border-y border-x border-neutral-300 bg-white/60 backdrop-blur-sm px-4">
       <div className="flex items-center">
         <span
           className={`${courierPrime.className} inline-flex items-center rounded-md px-4 py-3 text-2xl font-bold text-black`}

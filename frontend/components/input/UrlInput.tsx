@@ -24,7 +24,7 @@ export default function UrlInputBar({
       id="url-input-bar"
       className="rounded-2xl px-4 py-2.5 flex items-center gap-3"
       style={{
-        background: "#ecf0f3",
+        background: "rgba(236, 240, 243, 0.3)",
         boxShadow: isFocused
           ? "0px 0px 0px 0px #ffffff, 0px 0px 0px 0px #d1d9e6, 4px 4px 6px 0px #d1d9e6 inset, -4px -4px 6px 0px #ffffff inset"
           : "-8px -4px 8px 0px #ffffff, 8px 4px 12px 0px #d1d9e6, 2px 2px 3px 0px #d1d9e6 inset, -2px -2px 3px 0px #ffffff inset",
