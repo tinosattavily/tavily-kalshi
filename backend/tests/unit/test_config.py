@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.config import PolymarketAPI, Settings, _get_env
+from app.config import KalshiAPI, Settings, _get_env
 
 
 def test_get_env():
@@ -65,7 +65,7 @@ def test_settings_default_values():
         assert settings.redis_db == 0
 
 
-def test_polymarket_api():
-    """Test PolymarketAPI class."""
-    assert PolymarketAPI.GAMMA_API == "https://gamma-api.polymarket.com"
-    assert PolymarketAPI.CLOB_API == "https://clob.polymarket.com"
+def test_kalshi_api():
+    """Test KalshiAPI class."""
+    assert KalshiAPI.DEMO_BASE == "https://demo-api.kalshi.co/trade-api/v2"
+    assert KalshiAPI.PROD_BASE == "https://trading-api.kalshi.com/trade-api/v2"

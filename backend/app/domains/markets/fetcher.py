@@ -5,14 +5,65 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.config import PolymarketAPI, get_logger
+import aiohttp
+from aiohttp import ClientTimeout
+
+from app.config import get_logger
 from app.domains.markets.schemas import Event, Market
-from app.infrastructure.http import fetch_json_async
 
 logger = get_logger(__name__)
 
-# API endpoints from config
-GAMMA_API = PolymarketAPI.GAMMA_API
+# Polymarket API endpoints (keeping inline since PolymarketAPI class removed)
+GAMMA_API = "https://gamma-api.polymarket.com"
+CLOB_API = "https://clob.polymarket.com"
+
+
+async def _fetch_json(
+    url: str, params: Optional[Dict[str, Any]] = None, timeout: int = 10
+) -> Any:
+    """Fetch JSON from URL with basic error handling."""
+    logger.debug("Fetching JSON", url=url, params=params)
+    timeout_obj = ClientTimeout(total=timeout)
+    async with aiohttp.ClientSession(timeout=timeout_obj) as session:
+        async with session.get(url, params=params) as response:
+            response.raise_for_status()
+            return await response.json()
+
+
+def _normalize_number(v: Any) -> Optional[float]:
+    """Normalize a value to float."""
+    try:
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        return float(str(v))
+    except Exception:
+        return None
+
+
+async def fetch_order_book_async(token_id: str) -> Dict[str, Any]:
+    """Fetch order book with basic error handling."""
+    try:
+        data = await _fetch_json(f"{CLOB_API}/book", params={"token_id": token_id})
+
+        def map_levels(levels: List[Dict[str, Any]]) -> List[Dict[str, float]]:
+            out: List[Dict[str, float]] = []
+            for lvl in levels or []:
+                p = _normalize_number(lvl.get("price"))
+                s = _normalize_number(lvl.get("size"))
+                if p is not None and s is not None:
+                    out.append({"price": p, "size": s})
+            return out
+
+        bids = map_levels(data.get("bids", []))
+        asks = map_levels(data.get("asks", []))
+        best_bid = bids[0]["price"] if bids else None
+        best_ask = asks[0]["price"] if asks else None
+        return {"bids": bids, "asks": asks, "best_bid": best_bid, "best_ask": best_ask}
+    except Exception as e:
+        logger.warning("Failed to fetch order book", token_id=token_id, error=str(e))
+        return {"bids": [], "asks": [], "best_bid": None, "best_ask": None}
 
 
 def _extract_series_comment_count(event_data: Dict[str, Any]) -> Optional[int]:
@@ -37,7 +88,7 @@ async def get_event_and_markets_by_slug(
     """
     try:
         # Try events endpoint first - it has accurate event-level data like commentCount
-        events_raw = await fetch_json_async(f"{GAMMA_API}/events", params={"slug": slug})
+        events_raw = await _fetch_json(f"{GAMMA_API}/events", params={"slug": slug})
 
         # Handle both array response and dict with "data" key
         if isinstance(events_raw, dict):
@@ -179,7 +230,7 @@ async def get_event_and_markets_by_slug(
 
         # Fallback to markets endpoint if events endpoint returns nothing
         logger.debug("Events endpoint returned nothing, trying markets endpoint", slug=slug)
-        markets_raw = await fetch_json_async(f"{GAMMA_API}/markets", params={"slug": slug})
+        markets_raw = await _fetch_json(f"{GAMMA_API}/markets", params={"slug": slug})
         if isinstance(markets_raw, dict):
             markets_list = markets_raw.get("data", [])
         elif isinstance(markets_raw, list):

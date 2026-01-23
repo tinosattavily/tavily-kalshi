@@ -39,13 +39,3 @@ class Settings:
 
 
 settings = Settings()
-
-
-# ---------- API Endpoints Configuration ----------
-
-
-class PolymarketAPI:
-    """Polymarket API endpoint constants."""
-
-    GAMMA_API = "https://gamma-api.polymarket.com"
-    CLOB_API = "https://clob.polymarket.com"

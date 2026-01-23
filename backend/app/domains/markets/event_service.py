@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.config import get_logger
+from app.domains.markets.parsing import parse_kalshi_url
+from app.domains.markets.kalshi_fetcher import get_kalshi_event_by_ticker
+from app.domains.markets.kalshi_transformer import build_kalshi_event_context
 
 logger = get_logger(__name__)
 
@@ -153,6 +156,73 @@ class EventService:
             "Placeholder description for the macro event associated with this market.",
         )
         return normalized, context, description
+
+    # -------------------------------------------------------------------------
+    # Kalshi Methods
+    # -------------------------------------------------------------------------
+
+    async def get_kalshi_event_context(self, event_ticker: str) -> Dict[str, Any]:
+        """Fetch Kalshi event and return context with all markets.
+
+        Args:
+            event_ticker: Kalshi event ticker
+
+        Returns:
+            Event context dictionary with market list
+        """
+        event = await get_kalshi_event_by_ticker(event_ticker)
+        return build_kalshi_event_context(event)
+
+    async def get_kalshi_event_context_from_url(self, url: str) -> Dict[str, Any]:
+        """Get Kalshi event context from a URL.
+
+        Args:
+            url: Kalshi market or event URL
+
+        Returns:
+            Event context dictionary
+
+        Raises:
+            ValueError: If event ticker cannot be determined
+        """
+        ticker, event_ticker, url_type = parse_kalshi_url(url)
+
+        # If market URL, extract event ticker from it
+        if url_type == "market" and ticker:
+            # Event ticker was extracted from market ticker
+            pass
+        elif url_type == "event":
+            # Event ticker directly from URL
+            pass
+        else:
+            raise ValueError(f"Could not determine event ticker from URL: {url}")
+
+        if not event_ticker:
+            raise ValueError(f"Could not determine event ticker from URL: {url}")
+
+        return await self.get_kalshi_event_context(event_ticker)
+
+    def requires_kalshi_market_selection(self, context: Dict[str, Any]) -> bool:
+        """Check if Kalshi event has multiple markets requiring selection.
+
+        Args:
+            context: Event context dictionary
+
+        Returns:
+            True if selection is required
+        """
+        return context.get("requires_selection", False)
+
+    def get_kalshi_market_options(self, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Get list of Kalshi markets for selection UI.
+
+        Args:
+            context: Event context dictionary
+
+        Returns:
+            List of market option dictionaries
+        """
+        return context.get("markets", [])
 
 
 # Module-level singleton

@@ -69,3 +69,16 @@ class AgentState(TypedDict, total=False):
     position_avg_price: float  # Average entry price for current position
     # Configuration options
     config: dict[str, Any]  # Analysis configuration (agent toggles, limits, etc.)
+
+    # -------------------------------------------------------------------------
+    # Kalshi-specific fields
+    # -------------------------------------------------------------------------
+    kalshi_url: str  # Kalshi market or event URL
+    ticker: str  # Kalshi market ticker (e.g., "INXD-25JAN17-B24999")
+    event_ticker: str  # Kalshi event ticker (e.g., "INXD-25JAN17")
+    selected_ticker: str  # Selected market ticker (for multi-market events)
+    available_markets: list[dict[str, Any]]  # List of markets for selection UI
+    # Cents-based probability (1-99)
+    model_probability_cents: int  # Model's probability estimate in cents
+    market_probability_cents: int  # Current market price in cents
+    edge_cents: int  # Edge (model - market) in cents

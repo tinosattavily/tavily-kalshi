@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from app.config import get_logger
 from app.domains.markets import get_market_service
-from app.infrastructure.http import fetch_order_book_async
+from app.domains.markets.fetcher import fetch_order_book_async
 from app.orchestration.state import AgentState
 
 logger = get_logger(__name__)

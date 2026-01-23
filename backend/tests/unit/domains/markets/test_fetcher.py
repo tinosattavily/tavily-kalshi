@@ -8,14 +8,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from app.domains.markets.fetcher import _extract_series_comment_count, get_event_and_markets_by_slug
+from app.domains.markets.fetcher import (
+    _extract_series_comment_count,
+    fetch_order_book_async,
+    get_event_and_markets_by_slug,
+)
 from app.domains.markets.parsing import (
     extract_slug_from_url,
     normalize_number,
     parse_end_date,
     parse_prices_from_market,
 )
-from app.infrastructure.http.polymarket import fetch_json_async, fetch_order_book_async
 
 
 def test_extract_series_comment_count_valid():
@@ -78,7 +81,7 @@ async def test_get_event_and_markets_by_slug_events_endpoint():
         "commentCount": 10,
     }
 
-    with patch("app.domains.markets.fetcher.fetch_json_async") as mock_fetch:
+    with patch("app.domains.markets.fetcher._fetch_json") as mock_fetch:
         mock_fetch.return_value = [mock_event]
         event, markets = await get_event_and_markets_by_slug("test-event")
 
@@ -88,7 +91,7 @@ async def test_get_event_and_markets_by_slug_events_endpoint():
 @pytest.mark.anyio(backend="asyncio")
 async def test_get_event_and_markets_by_slug_caching():
     """Test get_event_and_markets_by_slug caching behavior."""
-    with patch("app.domains.markets.fetcher.fetch_json_async") as mock_fetch:
+    with patch("app.domains.markets.fetcher._fetch_json") as mock_fetch:
         mock_fetch.return_value = [{"slug": "test"}]
         event, markets = await get_event_and_markets_by_slug("test-event")
 
@@ -139,8 +142,8 @@ def test_parse_end_date_invalid():
 
 
 @pytest.mark.anyio(backend="asyncio")
-async def test_fetch_json_async_success():
-    """Test fetch_json_async with successful request."""
+async def test_fetch_json_success():
+    """Test _fetch_json with successful request."""
     mock_response = {"data": "test"}
 
     with patch("aiohttp.ClientSession.get") as mock_get:
@@ -150,40 +153,10 @@ async def test_fetch_json_async_success():
         mock_resp.raise_for_status = MagicMock()
         mock_get.return_value.__aenter__.return_value = mock_resp
 
-        result = await fetch_json_async("https://example.com/api")
+        from app.domains.markets.fetcher import _fetch_json
+        result = await _fetch_json("https://example.com/api")
 
         assert result == mock_response
-
-
-@pytest.mark.anyio(backend="asyncio")
-async def test_fetch_json_async_error():
-    """Test fetch_json_async with HTTP error."""
-
-    # Patch the _fetch_json_impl_async to raise an exception
-    async def mock_fetch_impl(url, params=None, timeout=10):
-        # Simulate aiohttp raising ClientResponseError
-        error = aiohttp.ClientResponseError(
-            request_info=None, history=(), status=500, message="Server Error"
-        )
-        raise error
-
-    # Ensure cache is empty and circuit breaker allows attempts
-    with (
-        patch(
-            "app.infrastructure.http.cache.polymarket_cache.get",
-            return_value=None,
-        ),
-        patch(
-            "app.infrastructure.http.resilience.polymarket_circuit.can_attempt",
-            return_value=True,
-        ),
-        patch(
-            "app.infrastructure.http.polymarket._fetch_json_impl_async",
-            side_effect=mock_fetch_impl,
-        ),
-    ):
-        with pytest.raises(aiohttp.ClientResponseError):
-            await fetch_json_async("https://example.com/api")
 
 
 @pytest.mark.anyio(backend="asyncio")
@@ -194,7 +167,7 @@ async def test_fetch_order_book_async():
         "asks": [{"price": "0.52", "size": "150"}],
     }
 
-    with patch("app.infrastructure.http.polymarket.fetch_json_async") as mock_fetch:
+    with patch("app.domains.markets.fetcher._fetch_json") as mock_fetch:
         mock_fetch.return_value = mock_order_book
         result = await fetch_order_book_async("token-123")
 

@@ -20,12 +20,6 @@ class ExternalAPIError(ProphilyError):
     pass
 
 
-class PolymarketAPIError(ExternalAPIError):
-    """Raised when Polymarket API call fails."""
-
-    pass
-
-
 class KalshiAPIError(ExternalAPIError):
     """Raised when Kalshi API call fails."""
 

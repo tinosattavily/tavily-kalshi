@@ -164,37 +164,3 @@ async def test_health_ready_endpoint_degraded():
         assert data["status"] in ["ok", "degraded"]
 
 
-@pytest.mark.anyio(backend="asyncio")
-async def test_debug_polymarket_endpoint():
-    """Test /debug/polymarket/{slug} endpoint."""
-    with (
-        patch("app.api.routes.health.fetch_json_async") as mock_fetch,
-        patch("app.api.routes.health.get_event_and_markets_by_slug") as mock_get,
-        patch("app.api.routes.health.polymarket_cache") as mock_cache,
-    ):
-        mock_fetch.side_effect = [
-            [{"slug": "test", "commentCount": 10}],
-            [{"slug": "test-market", "question": "Test?"}],
-        ]
-        mock_get.return_value = ({"slug": "test"}, [{"slug": "test-market"}])
-        mock_cache._cache = {}
-
-        response = client.get("/debug/polymarket/test-slug")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "slug" in data
-        assert "raw_events_response" in data
-
-
-@pytest.mark.anyio(backend="asyncio")
-async def test_debug_polymarket_endpoint_error():
-    """Test /debug/polymarket/{slug} endpoint with error."""
-    with patch("app.api.routes.health.fetch_json_async") as mock_fetch:
-        mock_fetch.side_effect = Exception("API Error")
-
-        response = client.get("/debug/polymarket/test-slug")
-
-        assert response.status_code == 500
-        data = response.json()
-        assert "error" in data

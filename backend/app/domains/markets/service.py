@@ -8,9 +8,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import get_logger
 from app.domains.markets.fetcher import get_event_and_markets_by_slug
-from app.domains.markets.parsing import extract_slug_from_url
+from app.domains.markets.parsing import extract_slug_from_url, parse_kalshi_url
 from app.domains.markets.selector import find_market_by_slug, select_market_from_options
 from app.domains.markets.transformer import build_market_options, build_market_snapshot
+from app.domains.markets.kalshi_fetcher import get_kalshi_market_by_ticker
+from app.domains.markets.kalshi_transformer import build_kalshi_market_snapshot
 
 logger = get_logger(__name__)
 
@@ -269,6 +271,48 @@ class MarketService:
                 event_state["commentCount"] = market_comment_count
 
         return event_state
+
+    # -------------------------------------------------------------------------
+    # Kalshi Methods
+    # -------------------------------------------------------------------------
+
+    async def get_kalshi_market_from_url(self, url: str) -> Dict[str, Any]:
+        """Fetch Kalshi market data from a URL.
+
+        Args:
+            url: Kalshi market or event URL
+
+        Returns:
+            Market snapshot dictionary with prices in cents
+
+        Raises:
+            ValueError: If URL cannot be parsed or is an event URL
+        """
+        ticker, event_ticker, url_type = parse_kalshi_url(url)
+
+        if url_type == "market" and ticker:
+            market = await get_kalshi_market_by_ticker(ticker)
+            return build_kalshi_market_snapshot(market)
+
+        if url_type == "event" and event_ticker:
+            raise ValueError(
+                f"Event URL requires market selection. "
+                f"Use EventService to get available markets for {event_ticker}"
+            )
+
+        raise ValueError(f"Could not parse ticker from URL: {url}")
+
+    async def get_kalshi_market_by_ticker_snapshot(self, ticker: str) -> Dict[str, Any]:
+        """Fetch Kalshi market by ticker and return snapshot.
+
+        Args:
+            ticker: Market ticker (e.g., "INXD-25JAN17-B24999")
+
+        Returns:
+            Market snapshot dictionary with prices in cents
+        """
+        market = await get_kalshi_market_by_ticker(ticker)
+        return build_kalshi_market_snapshot(market)
 
 
 # Module-level singleton

@@ -87,11 +87,30 @@ async def report_agent_node(state: AgentState) -> AgentState:
 def route_after_market(state: AgentState) -> str:
     """Route after market agent: check if market selection is required.
 
+    For multi-market events (Polymarket or Kalshi), the graph pauses to allow
+    the user to select a specific market before continuing analysis.
+
     Returns:
         "end" if market selection is required, "event_agent" otherwise.
     """
-    if state.get("requires_market_selection"):
-        return "end"
+    # Check if market selection is needed
+    requires_selection = state.get("requires_market_selection", False)
+
+    if requires_selection:
+        # For Kalshi: check if a ticker has been selected
+        selected_ticker = state.get("selected_ticker")
+        # For Polymarket: check if a slug has been selected
+        selected_slug = state.get("selected_market_slug")
+
+        # If selection is required but nothing selected, pause for user input
+        if not selected_ticker and not selected_slug:
+            logger.info(
+                "Market selection required - pausing for user input",
+                run_id=state.get("run_id"),
+                available_markets=len(state.get("available_markets", []) or state.get("market_options", [])),
+            )
+            return "end"
+
     return "event_agent"
 
 

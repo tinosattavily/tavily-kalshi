@@ -226,7 +226,6 @@ def _create_cache(ttl_seconds: int, cache_name: str) -> TTLCache | RedisCache:
 
 
 # Global caches - use Redis if configured, otherwise in-memory
-polymarket_cache = _create_cache(ttl_seconds=30, cache_name="polymarket")  # 30 second TTL
 tavily_cache = _create_cache(ttl_seconds=300, cache_name="tavily")  # 5 minute TTL
 openai_cache = _create_cache(ttl_seconds=600, cache_name="openai")  # 10 minute TTL
 kalshi_cache = _create_cache(ttl_seconds=30, cache_name="kalshi")  # 30 second TTL
