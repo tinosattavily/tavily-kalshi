@@ -2,11 +2,11 @@
 
 import React, { PropsWithChildren } from "react";
 
-import Background from "./Background";
+import Dashboard from "./Dashboard";
 
 
 export default function Layout({ children }: PropsWithChildren) {
-  // Render only the styled background (no hero content for now).
-  return <Background>{children}</Background>;
+  // Render the main dashboard.
+  return <Dashboard>{children}</Dashboard>;
 }
 

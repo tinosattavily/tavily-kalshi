@@ -8,7 +8,8 @@ export interface RecentRun {
   _id: string;
   run_id?: string;
   slug?: string;
-  polymarket_url?: string;
+  market_url?: string;
+  polymarket_url?: string; // Legacy field for backwards compatibility
   run_at?: string;
   market_snapshot?: {
     question?: string;

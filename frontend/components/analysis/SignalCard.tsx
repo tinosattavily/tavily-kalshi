@@ -201,7 +201,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
             <div className="bg-slate-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg">
               <div className="font-semibold mb-1">Market Probability</div>
               <div className="text-slate-300">
-                The current probability implied by Polymarket prices. This is what the market believes is the true probability of the YES outcome.
+                The current probability implied by Kalshi prices. This is what the market believes is the true probability of the YES outcome.
               </div>
               <div className="absolute top-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-slate-900"></div>
             </div>

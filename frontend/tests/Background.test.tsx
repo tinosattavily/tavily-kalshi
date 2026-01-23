@@ -2,9 +2,10 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import Background from "../components/Background";
+import Dashboard from "../components/Dashboard";
+import { TestWrapper } from "./utils/testWrapper";
 
-jest.mock("../components/background/RecentSessions", () => ({
+jest.mock("../components/layout/HistorySidebar", () => ({
   __esModule: true,
   default: () => <div data-testid="recent-sessions" />,
 }));
@@ -20,32 +21,41 @@ jest.mock("next/navigation", () => ({
 // Mock fetch
 global.fetch = jest.fn();
 
-describe("Background Component", () => {
+// Helper to render Dashboard with providers
+const renderDashboard = () => {
+  return render(
+    <TestWrapper>
+      <Dashboard />
+    </TestWrapper>
+  );
+};
+
+describe("Dashboard Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (global.fetch as jest.Mock).mockClear();
   });
 
   test("renders component", () => {
-    render(<Background />);
+    renderDashboard();
     // Background uses a section with id "app-root", not a main role
     expect(document.getElementById("app-root")).toBeInTheDocument();
   });
 
   test("renders URL input bar", () => {
-    render(<Background />);
-    const input = screen.getByPlaceholderText(/polymarket/i);
+    renderDashboard();
+    const input = screen.getByPlaceholderText(/kalshi/i);
     expect(input).toBeInTheDocument();
   });
 
   test("handles URL input", async () => {
     const user = userEvent.setup();
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     
-    expect(input).toHaveValue("https://polymarket.com/market/test");
+    expect(input).toHaveValue("https://kalshi.com/markets/test");
   });
 
   test("handles form submission", async () => {
@@ -55,10 +65,10 @@ describe("Background Component", () => {
       json: async () => ({ run_id: "test-run-id" }),
     });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
@@ -98,10 +108,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/event/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/events/test");
     
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
@@ -129,10 +139,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
@@ -167,10 +177,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
@@ -210,10 +220,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
@@ -225,23 +235,21 @@ describe("Background Component", () => {
 
   test("handles error states", async () => {
     const user = userEvent.setup();
-    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error("Network error"));
 
-    render(<Background />);
-    
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
-    
+    renderDashboard();
+
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
+
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
     await waitFor(() => {
-      // Should handle error gracefully - component uses alert() for errors
-      expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining("Network error"));
+      // Should show error toast
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText(/network error/i)).toBeInTheDocument();
     });
-    
-    alertSpy.mockRestore();
   });
 
   test("handles loading states", async () => {
@@ -250,10 +258,10 @@ describe("Background Component", () => {
       () => new Promise(() => {}) // Never resolves
     );
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
@@ -266,12 +274,12 @@ describe("Background Component", () => {
   });
 
   test("handles empty prompt state", () => {
-    render(<Background />);
-    expect(screen.getByText(/enter a polymarket/i)).toBeInTheDocument();
+    renderDashboard();
+    expect(screen.getByText(/enter a kalshi/i)).toBeInTheDocument();
   });
 
   test("cleans up polling on unmount", () => {
-    const { unmount } = render(<Background />);
+    const { unmount } = renderDashboard();
     unmount();
     // Component should unmount without errors
     expect(true).toBe(true);
@@ -279,9 +287,9 @@ describe("Background Component", () => {
 
   test("handles early return when URL is empty", async () => {
     const user = userEvent.setup();
-    render(<Background />);
+    renderDashboard();
     
-    const _input = screen.getByPlaceholderText(/polymarket/i);
+    const _input = screen.getByPlaceholderText(/kalshi/i);
     // Don't type anything, leave it empty
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
@@ -294,9 +302,9 @@ describe("Background Component", () => {
 
   test("handles early return when URL is whitespace only", async () => {
     const user = userEvent.setup();
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
+    const input = screen.getByPlaceholderText(/kalshi/i);
     await user.type(input, "   ");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
@@ -313,10 +321,10 @@ describe("Background Component", () => {
       () => new Promise(() => {}) // Never resolves to keep isSubmitting true
     );
     
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     
     // First click starts submission
@@ -336,8 +344,7 @@ describe("Background Component", () => {
 
   test("handles error when response.json() fails in error path", async () => {
     const user = userEvent.setup();
-    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
-    
+
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: false,
       status: 400,
@@ -346,134 +353,123 @@ describe("Background Component", () => {
       },
       text: async () => "Error text",
     });
-    
-    render(<Background />);
-    
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+
+    renderDashboard();
+
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
-    
+
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalled();
+      // Should show error toast
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
-    
-    alertSpy.mockRestore();
   });
 
   test("handles invalid run_id - undefined", async () => {
     const user = userEvent.setup();
-    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
-    
+
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ run_id: undefined }),
     });
-    
-    render(<Background />);
-    
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+
+    renderDashboard();
+
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
-    
+
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining("Backend did not return run_id"));
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText(/backend did not return run_id/i)).toBeInTheDocument();
     });
-    
-    alertSpy.mockRestore();
   });
 
   test("handles invalid run_id - null", async () => {
     const user = userEvent.setup();
-    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
-    
+
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ run_id: null }),
     });
-    
-    render(<Background />);
-    
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+
+    renderDashboard();
+
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
-    
+
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining("Backend did not return run_id"));
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText(/backend did not return run_id/i)).toBeInTheDocument();
     });
-    
-    alertSpy.mockRestore();
   });
 
   test("handles invalid run_id - empty string", async () => {
     const user = userEvent.setup();
-    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
-    
+
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ run_id: "" }),
     });
-    
-    render(<Background />);
-    
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+
+    renderDashboard();
+
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
-    
+
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining("Backend did not return run_id"));
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText(/backend did not return run_id/i)).toBeInTheDocument();
     });
-    
-    alertSpy.mockRestore();
   });
 
   test("handles invalid run_id - string 'undefined'", async () => {
     const user = userEvent.setup();
-    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
-    
+
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ run_id: "undefined" }),
     });
-    
-    render(<Background />);
-    
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+
+    renderDashboard();
+
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
-    
+
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid run_id"));
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText(/invalid run_id/i)).toBeInTheDocument();
     });
-    
-    alertSpy.mockRestore();
   });
 
   test("handles invalid run_id - string 'null'", async () => {
     const user = userEvent.setup();
-    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
-    
+
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ run_id: "null" }),
     });
-    
-    render(<Background />);
-    
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+
+    renderDashboard();
+
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
-    
+
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid run_id"));
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByText(/invalid run_id/i)).toBeInTheDocument();
     });
-    
-    alertSpy.mockRestore();
   });
 
   test("handles market selection successfully", async () => {
@@ -511,10 +507,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/event/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/events/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -544,8 +540,7 @@ describe("Background Component", () => {
 
   test("handles market selection error", async () => {
     const user = userEvent.setup();
-    const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
-    
+
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
@@ -566,10 +561,10 @@ describe("Background Component", () => {
       })
       .mockRejectedValueOnce(new Error("Network error"));
 
-    render(<Background />);
-    
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/event/test");
+    renderDashboard();
+
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/events/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -581,15 +576,14 @@ describe("Background Component", () => {
     // Find the market button by role and name
     const marketButton = screen.getByRole("button", { name: /market 1/i });
     expect(marketButton).toBeInTheDocument();
-    
+
     // Click on the market button - this should trigger an error
     await user.click(marketButton);
 
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalled();
+      // Should show error toast
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     }, { timeout: 10000 });
-    
-    alertSpy.mockRestore();
   }, 15000);
 
   test("handles Enter key to submit", async () => {
@@ -599,10 +593,10 @@ describe("Background Component", () => {
       json: async () => ({ run_id: "test-run-id" }),
     });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     await user.keyboard("{Enter}");
 
     await waitFor(() => {
@@ -617,20 +611,20 @@ describe("Background Component", () => {
 
   test("humanizeClosesIn handles valid ISO date", () => {
         const _endDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(); // 2 days
-    render(<Background />);
+    renderDashboard();
     // This is tested indirectly through the component rendering with endDate
     // We can't directly test the function, but we can verify it's used correctly
     expect(true).toBe(true);
   });
 
   test("humanizeClosesIn handles invalid date", () => {
-    render(<Background />);
+    renderDashboard();
     // Invalid dates are handled gracefully
     expect(true).toBe(true);
   });
 
   test("humanizeClosesIn handles null/undefined", () => {
-    render(<Background />);
+    renderDashboard();
     // Null/undefined dates return "—"
     expect(true).toBe(true);
   });
@@ -656,10 +650,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -689,10 +683,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -722,10 +716,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -758,10 +752,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -796,10 +790,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -837,10 +831,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -873,10 +867,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -906,10 +900,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -937,10 +931,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -968,10 +962,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -1001,10 +995,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -1038,10 +1032,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -1070,10 +1064,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -1102,10 +1096,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -1132,10 +1126,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -1164,10 +1158,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -1201,10 +1195,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 
@@ -1237,10 +1231,10 @@ describe("Background Component", () => {
         }),
       });
 
-    render(<Background />);
+    renderDashboard();
     
-    const input = screen.getByPlaceholderText(/polymarket/i);
-    await user.type(input, "https://polymarket.com/market/test");
+    const input = screen.getByPlaceholderText(/kalshi/i);
+    await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
 

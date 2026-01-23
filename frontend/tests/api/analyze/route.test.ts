@@ -33,7 +33,7 @@ describe("POST /api/analyze", () => {
 
   test("proxies request to backend successfully", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -52,7 +52,7 @@ describe("POST /api/analyze", () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url: "https://polymarket.com/event/123" }),
+        body: JSON.stringify({ url: "https://kalshi.com/events/test-event" }),
       }
     );
 
@@ -65,7 +65,7 @@ describe("POST /api/analyze", () => {
     process.env.BACKEND_URL = "https://api.example.com";
 
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -85,7 +85,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with JSON response", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -107,7 +107,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with text response", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -129,7 +129,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with empty text response", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -151,7 +151,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with error field", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -170,7 +170,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with message field", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -189,7 +189,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with unknown error shape", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -208,7 +208,7 @@ describe("POST /api/analyze", () => {
 
   test("handles fetch error", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     (global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
@@ -223,7 +223,7 @@ describe("POST /api/analyze", () => {
 
   test("handles non-Error exception", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     (global.fetch as jest.Mock).mockRejectedValue("String error");
@@ -254,7 +254,7 @@ describe("POST /api/analyze", () => {
 
   test("forwards request body correctly", async () => {
     const requestBody = {
-      url: "https://polymarket.com/event/123",
+      url: "https://kalshi.com/events/test-event",
       options: { include_news: true },
     };
 

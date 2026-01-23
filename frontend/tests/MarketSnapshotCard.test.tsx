@@ -1,12 +1,12 @@
 /** @jest-environment jsdom */
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MarketSnapshotCard } from "../components/MarketSnapshotCard";
+import { MarketCard } from "../components/analysis/MarketCard";
 
-describe("MarketSnapshotCard", () => {
+describe("MarketCard", () => {
   const defaultProps = {
     eventTitle: "Test Event",
-    polymarketUrl: "https://polymarket.com/market/test",
+    marketUrl: "https://kalshi.com/markets/test",
     closesIn: "23 days",
     yesPrice: 0.5,
     noPrice: 0.5,
@@ -14,7 +14,7 @@ describe("MarketSnapshotCard", () => {
   };
 
   test("renders with full data", () => {
-    render(<MarketSnapshotCard {...defaultProps} />);
+    render(<MarketCard {...defaultProps} />);
     
     expect(screen.getByText("Test Event")).toBeInTheDocument();
     // "0.500" appears multiple times (YES and NO tiles), so use getAllByText
@@ -30,7 +30,7 @@ describe("MarketSnapshotCard", () => {
 
   test("handles missing data", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         question={undefined}
         commentCount={undefined}
@@ -42,7 +42,7 @@ describe("MarketSnapshotCard", () => {
 
   test("formats prices correctly", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         yesPrice={0.1234}
         noPrice={0.8766}
@@ -56,7 +56,7 @@ describe("MarketSnapshotCard", () => {
   test("formats dates correctly", () => {
     const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate={endDate}
       />
@@ -66,16 +66,16 @@ describe("MarketSnapshotCard", () => {
   });
 
   test("handles URL correctly", () => {
-    render(<MarketSnapshotCard {...defaultProps} />);
-    
-    const link = screen.getByRole("link", { name: /polymarket/i });
-    expect(link).toHaveAttribute("href", "https://polymarket.com/market/test");
+    render(<MarketCard {...defaultProps} />);
+
+    const link = screen.getByRole("link", { name: /kalshi/i });
+    expect(link).toHaveAttribute("href", "https://kalshi.com/markets/test");
     expect(link).toHaveAttribute("target", "_blank");
   });
 
   test("displays all prop variations", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         question="Will this test pass?"
         groupItemTitle="Test Market"
@@ -95,7 +95,7 @@ describe("MarketSnapshotCard", () => {
 
   test("handles order book data", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         bids={[{ price: 0.48, size: 100 }, { price: 0.47, size: 200 }]}
         asks={[{ price: 0.52, size: 150 }, { price: 0.53, size: 250 }]}
@@ -116,7 +116,7 @@ describe("MarketSnapshotCard", () => {
     ];
     
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         question="Test?"
         previousMarkets={previousMarkets}
@@ -139,7 +139,7 @@ describe("MarketSnapshotCard", () => {
   test("displays red countdown color when less than 1 day", () => {
     const endDate = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(); // 12 hours from now
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate={endDate}
       />
@@ -152,7 +152,7 @@ describe("MarketSnapshotCard", () => {
   test("displays yellow countdown color when less than 7 days but more than 1 day", () => {
     const endDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(); // 3 days from now
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate={endDate}
       />
@@ -165,7 +165,7 @@ describe("MarketSnapshotCard", () => {
   test("displays green countdown color when more than 7 days", () => {
     const endDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(); // 10 days from now
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate={endDate}
       />
@@ -177,7 +177,7 @@ describe("MarketSnapshotCard", () => {
 
   test("handles invalid date in countdown color", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate="invalid-date"
       />
@@ -195,7 +195,7 @@ describe("MarketSnapshotCard", () => {
     ];
     
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         question="Test?"
         previousMarkets={previousMarkets}
@@ -219,12 +219,12 @@ describe("MarketSnapshotCard", () => {
     }
   });
 
-  test("handles Polymarket favicon image error", () => {
-    render(<MarketSnapshotCard {...defaultProps} />);
-    
+  test("handles Kalshi favicon image error", () => {
+    render(<MarketCard {...defaultProps} />);
+
     const images = screen.getAllByRole("img");
-    const favicon = images.find(img => (img as HTMLImageElement).alt === "Polymarket");
-    
+    const favicon = images.find(img => (img as HTMLImageElement).alt === "Kalshi");
+
     if (favicon) {
       fireEvent.error(favicon);
       expect(favicon).toHaveStyle({ display: "none" });

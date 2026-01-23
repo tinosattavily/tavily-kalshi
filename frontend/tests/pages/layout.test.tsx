@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import React from "react";
 import RootLayout from "../../app/layout";
+import { Providers } from "../../components/Providers";
 
 // Mock next/font/google
 jest.mock("next/font/google", () => ({
@@ -20,6 +21,12 @@ describe("RootLayout", () => {
   const getBodyElement = (layout: React.ReactElement) =>
     layout.props.children as React.ReactElement;
 
+  const getProvidersChildren = (bodyElement: React.ReactElement) => {
+    // Body wraps children in Providers component
+    const providersElement = bodyElement.props.children as React.ReactElement;
+    return providersElement.props.children;
+  };
+
   test("renders html element with lang attribute", () => {
     const layout = renderLayout(<div>Test Content</div>);
     expect(layout.type).toBe("html");
@@ -33,27 +40,37 @@ describe("RootLayout", () => {
     expect(bodyElement.props.className).toBe("inter-font-class");
   });
 
-  test("renders children", () => {
+  test("wraps children with Providers", () => {
+    const layout = renderLayout(<div>Test Content</div>);
+    const bodyElement = getBodyElement(layout);
+    const providersElement = bodyElement.props.children as React.ReactElement;
+    expect(providersElement.type).toBe(Providers);
+  });
+
+  test("renders children inside Providers", () => {
     const child = <div data-testid="child">Test Content</div>;
     const layout = renderLayout(child);
     const bodyElement = getBodyElement(layout);
-    expect(bodyElement.props.children).toEqual(child);
+    const childrenInProviders = getProvidersChildren(bodyElement);
+    expect(childrenInProviders).toEqual(child);
   });
 
-  test("renders multiple children", () => {
+  test("renders multiple children inside Providers", () => {
     const children = [
       <div key="child1" data-testid="child1">Child 1</div>,
       <div key="child2" data-testid="child2">Child 2</div>,
     ];
     const layout = renderLayout(children);
     const bodyElement = getBodyElement(layout);
-    expect(bodyElement.props.children).toEqual(children);
+    const childrenInProviders = getProvidersChildren(bodyElement);
+    expect(childrenInProviders).toEqual(children);
   });
 
-  test("renders empty children", () => {
+  test("renders empty children inside Providers", () => {
     const layout = renderLayout(null);
     const bodyElement = getBodyElement(layout);
-    expect(bodyElement.props.children).toBeNull();
+    const childrenInProviders = getProvidersChildren(bodyElement);
+    expect(childrenInProviders).toBeNull();
   });
 
   test("has correct metadata", () => {
@@ -77,7 +94,7 @@ describe("RootLayout", () => {
     });
   });
 
-  test("renders complex children structure", () => {
+  test("renders complex children structure inside Providers", () => {
     const children = (
       <>
         <header>
@@ -93,7 +110,8 @@ describe("RootLayout", () => {
     );
     const layout = renderLayout(children);
     const bodyElement = getBodyElement(layout);
-    expect(bodyElement.props.children).toEqual(children);
+    const childrenInProviders = getProvidersChildren(bodyElement);
+    expect(childrenInProviders).toEqual(children);
   });
 });
 

@@ -2,9 +2,9 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import MarketSelection from "../components/background/MarketSelection";
+import MarketPicker from "../components/analysis/MarketPicker";
 
-describe("MarketSelection Component", () => {
+describe("MarketPicker Component", () => {
   const mockOptions = [
     {
       slug: "market-1",
@@ -58,7 +58,7 @@ describe("MarketSelection Component", () => {
   });
 
   test("renders component with options", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     expect(screen.getByText("Test Event")).toBeInTheDocument();
     expect(screen.getByText("Select a market")).toBeInTheDocument();
     expect(screen.getByText("Will X happen?")).toBeInTheDocument();
@@ -67,12 +67,12 @@ describe("MarketSelection Component", () => {
   });
 
   test("renders without event context", () => {
-    render(<MarketSelection {...defaultProps} eventContext={null} />);
+    render(<MarketPicker {...defaultProps} eventContext={null} />);
     expect(screen.getByText("Event")).toBeInTheDocument();
   });
 
   test("renders single market with correct text", () => {
-    render(<MarketSelection {...defaultProps} options={[mockOptions[0]]} />);
+    render(<MarketPicker {...defaultProps} options={[mockOptions[0]]} />);
     // When there's a question, it shows the question instead of "Selected market"
     // The question appears in both the subtitle and the button
     expect(screen.getAllByText("Will X happen?").length).toBeGreaterThan(0);
@@ -80,14 +80,14 @@ describe("MarketSelection Component", () => {
 
   test("calls onSelect when market button is clicked", async () => {
     const user = userEvent.setup();
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const button = screen.getByRole("button", { name: /Will X happen/i });
     await user.click(button);
     expect(defaultProps.onSelect).toHaveBeenCalledWith("market-1");
   });
 
   test("disables buttons when isSubmitting is true", () => {
-    render(<MarketSelection {...defaultProps} isSubmitting={true} />);
+    render(<MarketPicker {...defaultProps} isSubmitting={true} />);
     const buttons = screen.getAllByRole("button");
     const marketButtons = buttons.filter(
       (btn) => btn.id?.startsWith("market-option-")
@@ -98,14 +98,14 @@ describe("MarketSelection Component", () => {
   });
 
   test("renders sort dropdown", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     expect(screen.getByText("Sort by")).toBeInTheDocument();
     expect(screen.getByText("Active (24h volume)")).toBeInTheDocument();
   });
 
   test("opens and closes sort dropdown", async () => {
     const user = userEvent.setup();
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
     await user.click(sortButton);
     expect(screen.getByRole("listbox")).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("MarketSelection Component", () => {
 
   test("changes sort option to 'soonest'", async () => {
     const user = userEvent.setup();
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
     await user.click(sortButton);
     const soonestOption = screen.getByRole("option", { name: /Soonest to close/i });
@@ -126,7 +126,7 @@ describe("MarketSelection Component", () => {
 
   test("changes sort option to 'total'", async () => {
     const user = userEvent.setup();
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
     await user.click(sortButton);
     const totalOption = screen.getByRole("option", { name: /Highest total volume/i });
@@ -135,7 +135,7 @@ describe("MarketSelection Component", () => {
   });
 
   test("sorts by active (24h volume) by default", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const buttons = screen.getAllByRole("button");
     const marketButtons = buttons.filter(
       (btn) => btn.id?.startsWith("market-option-")
@@ -148,7 +148,7 @@ describe("MarketSelection Component", () => {
 
   test("sorts by total volume when selected", async () => {
     const user = userEvent.setup();
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
     await user.click(sortButton);
     const totalOption = screen.getByRole("option", { name: /Highest total volume/i });
@@ -163,7 +163,7 @@ describe("MarketSelection Component", () => {
 
   test("sorts by soonest end date when selected", async () => {
     const user = userEvent.setup();
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
     await user.click(sortButton);
     const soonestOption = screen.getByRole("option", { name: /Soonest to close/i });
@@ -178,7 +178,7 @@ describe("MarketSelection Component", () => {
 
   test("calls onSortedOptionsChange when sort changes", async () => {
     const user = userEvent.setup();
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
     await user.click(sortButton);
     const soonestOption = screen.getByRole("option", { name: /Soonest to close/i });
@@ -195,23 +195,23 @@ describe("MarketSelection Component", () => {
         question: "Minimal market?",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={minimalOptions} />);
+    render(<MarketPicker {...defaultProps} options={minimalOptions} />);
     // The question appears in both the subtitle and the button, so use getAllByText
     expect(screen.getAllByText("Minimal market?").length).toBeGreaterThan(0);
   });
 
   test("displays bid/ask when available", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     expect(screen.getByText(/Bid\/Ask: 0\.5 \/ 0\.6/)).toBeInTheDocument();
   });
 
   test("displays liquidity when available", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     expect(screen.getByText(/Liq: 1,000/)).toBeInTheDocument();
   });
 
   test("handles image load error", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const images = screen.getAllByRole("img");
     const marketImage = images.find((img) => (img as HTMLImageElement).alt === "Market");
     if (marketImage) {
@@ -221,7 +221,7 @@ describe("MarketSelection Component", () => {
   });
 
   test("handles event image load error", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const images = screen.getAllByRole("img");
     const eventImage = images.find((img) => (img as HTMLImageElement).alt === "Event");
     if (eventImage) {
@@ -231,13 +231,13 @@ describe("MarketSelection Component", () => {
   });
 
   test("renders correct grid layout for 1 market", () => {
-    render(<MarketSelection {...defaultProps} options={[mockOptions[0]]} />);
+    render(<MarketPicker {...defaultProps} options={[mockOptions[0]]} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
   });
 
   test("renders correct grid layout for 2 markets", () => {
-    render(<MarketSelection {...defaultProps} options={mockOptions.slice(0, 2)} />);
+    render(<MarketPicker {...defaultProps} options={mockOptions.slice(0, 2)} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
   });
@@ -252,7 +252,7 @@ describe("MarketSelection Component", () => {
         end_date: "2025-01-02T23:59:59Z",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={fourMarkets} />);
+    render(<MarketPicker {...defaultProps} options={fourMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
   });
@@ -273,7 +273,7 @@ describe("MarketSelection Component", () => {
         end_date: "2025-01-03T23:59:59Z",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={fiveMarkets} />);
+    render(<MarketPicker {...defaultProps} options={fiveMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
   });
@@ -300,7 +300,7 @@ describe("MarketSelection Component", () => {
         end_date: "2025-01-04T23:59:59Z",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={sixMarkets} />);
+    render(<MarketPicker {...defaultProps} options={sixMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
   });
@@ -313,7 +313,7 @@ describe("MarketSelection Component", () => {
         volume24hr: 1000,
       },
     ];
-    render(<MarketSelection {...defaultProps} options={optionsWithoutEndDate} />);
+    render(<MarketPicker {...defaultProps} options={optionsWithoutEndDate} />);
     // The question appears in both the subtitle and the button
     expect(screen.getAllByText("No end date?").length).toBeGreaterThan(0);
   });
@@ -327,7 +327,7 @@ describe("MarketSelection Component", () => {
         end_date: "invalid-date",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={optionsWithInvalidDate} />);
+    render(<MarketPicker {...defaultProps} options={optionsWithInvalidDate} />);
     // The question appears in both the subtitle and the button
     expect(screen.getAllByText("Invalid date?").length).toBeGreaterThan(0);
   });
@@ -342,7 +342,7 @@ describe("MarketSelection Component", () => {
         liquidity: NaN,
       },
     ];
-    render(<MarketSelection {...defaultProps} options={optionsWithNaN} />);
+    render(<MarketPicker {...defaultProps} options={optionsWithNaN} />);
     // The question should be displayed in the button
     expect(screen.getByRole("button", { name: /NaN volume/i })).toBeInTheDocument();
   });
@@ -352,14 +352,14 @@ describe("MarketSelection Component", () => {
       ...defaultProps,
       onSortedOptionsChange: undefined,
     };
-    render(<MarketSelection {...propsWithoutCallback} />);
+    render(<MarketPicker {...propsWithoutCallback} />);
     // Should not throw
     expect(screen.getByText("Test Event")).toBeInTheDocument();
   });
 
   test("disables sort dropdown when isSubmitting is true", async () => {
     const user = userEvent.setup();
-    render(<MarketSelection {...defaultProps} isSubmitting={true} />);
+    render(<MarketPicker {...defaultProps} isSubmitting={true} />);
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
     expect(sortButton).toBeDisabled();
     await user.click(sortButton);
@@ -367,7 +367,7 @@ describe("MarketSelection Component", () => {
   });
 
   test("handles hover state changes", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const buttons = screen.getAllByRole("button");
     const marketButton = buttons.find((btn) => btn.id === "market-option-market-1");
     if (marketButton) {
@@ -378,7 +378,7 @@ describe("MarketSelection Component", () => {
   });
 
   test("handles mouse leave from grid", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const grid = document.querySelector("#market-options-grid");
     if (grid) {
       fireEvent.mouseLeave(grid);
@@ -405,7 +405,7 @@ describe("MarketSelection Component", () => {
         end_date: "2024-12-30T23:59:59Z",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={marketsWithZeroTotal} />);
+    render(<MarketPicker {...defaultProps} options={marketsWithZeroTotal} />);
     
     // Switch to total sort
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
@@ -435,7 +435,7 @@ describe("MarketSelection Component", () => {
         end_date: "2024-12-30T23:59:59Z",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={marketsWithSameVolume} />);
+    render(<MarketPicker {...defaultProps} options={marketsWithSameVolume} />);
     
     // Switch to total sort
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
@@ -465,7 +465,7 @@ describe("MarketSelection Component", () => {
         end_date: "2024-12-31T23:59:59Z",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={marketsWithSameEndDate} />);
+    render(<MarketPicker {...defaultProps} options={marketsWithSameEndDate} />);
     
     // Switch to soonest sort
     const sortButton = screen.getByRole("button", { name: /Active \(24h volume\)/i });
@@ -480,7 +480,7 @@ describe("MarketSelection Component", () => {
   });
 
   test("handles market image load error", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const images = screen.getAllByRole("img");
     const marketImage = images.find((img) => (img as HTMLImageElement).alt === "Market");
     if (marketImage) {
@@ -490,7 +490,7 @@ describe("MarketSelection Component", () => {
   });
 
   test("handles event image load error", () => {
-    render(<MarketSelection {...defaultProps} />);
+    render(<MarketPicker {...defaultProps} />);
     const images = screen.getAllByRole("img");
     const eventImage = images.find((img) => (img as HTMLImageElement).alt === "Event");
     if (eventImage) {
@@ -509,7 +509,7 @@ describe("MarketSelection Component", () => {
         end_date: "2025-01-02T23:59:59Z",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={fourMarkets} />);
+    render(<MarketPicker {...defaultProps} options={fourMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
     expect(grid).toHaveClass("grid-cols-2");
@@ -531,7 +531,7 @@ describe("MarketSelection Component", () => {
         end_date: "2025-01-03T23:59:59Z",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={fiveMarkets} />);
+    render(<MarketPicker {...defaultProps} options={fiveMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
     // 5 markets uses space-y-3 with nested grids (3+2 layout)
@@ -561,7 +561,7 @@ describe("MarketSelection Component", () => {
         end_date: "2025-01-04T23:59:59Z",
       },
     ];
-    render(<MarketSelection {...defaultProps} options={sixMarkets} />);
+    render(<MarketPicker {...defaultProps} options={sixMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
     expect(grid).toHaveClass("grid-cols-3");

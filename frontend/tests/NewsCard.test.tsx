@@ -2,7 +2,7 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NewsCard } from "../components/NewsCard";
+import { NewsCard } from "../components/analysis/NewsCard";
 
 describe("NewsCard", () => {
   const mockArticles = [

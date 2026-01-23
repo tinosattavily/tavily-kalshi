@@ -25,7 +25,7 @@ type MarketSnapshotProps = {
   // Event-level
   eventTitle: string;
   groupItemTitle?: string; // e.g. "50+ bps decrease"
-  polymarketUrl: string;
+  marketUrl: string;
   closesIn: string; // preformatted, e.g. "23 days"
   endDate?: string; // ISO date string for calculating time remaining
   // Market-level
@@ -64,11 +64,11 @@ function formatUsdCompact(value: number | undefined) {
 }
 
 
-export function MarketSnapshotCard(props: MarketSnapshotProps) {
+export function MarketCard(props: MarketSnapshotProps) {
   const {
     eventTitle,
     groupItemTitle,
-    polymarketUrl,
+    marketUrl,
     closesIn,
     endDate,
     question,
@@ -444,7 +444,7 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
         <div></div>
       </div>
 
-      {/* Tags and Polymarket link - bottom row */}
+      {/* Tags and Kalshi link - bottom row */}
       <div className="flex items-center justify-between mt-3">
         {groupItemTitle && (
           <div className="flex items-center gap-2">
@@ -456,14 +456,14 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
           </div>
         )}
         <a
-          href={polymarketUrl}
+          href={marketUrl}
           target="_blank"
           rel="noreferrer"
           className="group rounded-lg bg-white/90 px-2 py-1.5 flex items-center gap-1.5 hover:bg-white transition-colors"
         >
           <img
-            src="https://polymarket.com/favicon.ico"
-            alt="Polymarket"
+            src="https://kalshi.com/favicon.ico"
+            alt="Kalshi"
             className="h-4 w-4 object-contain"
             onError={(e) => {
               // Hide image if it fails to load
@@ -471,7 +471,7 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
               img.style.display = "none";
             }}
           />
-          <span className="text-[10px] text-slate-700 font-medium group-hover:text-[#1e3a8a] transition-colors">Polymarket</span>
+          <span className="text-[10px] text-slate-700 font-medium group-hover:text-[#1e3a8a] transition-colors">Kalshi</span>
           <ArrowUpRight className="h-3 w-3 text-slate-500 group-hover:text-[#1e3a8a] transition-colors" />
         </a>
       </div>

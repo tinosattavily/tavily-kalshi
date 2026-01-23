@@ -5,7 +5,7 @@ global.fetch = jest.fn().mockResolvedValue({
   json: async () => ({ runs: [] }),
 });
 
-jest.mock("../components/background/RecentSessions", () => ({
+jest.mock("../components/layout/HistorySidebar", () => ({
   __esModule: true,
   default: () => null,
 }));

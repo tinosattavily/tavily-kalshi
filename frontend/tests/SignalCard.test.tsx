@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import SignalCard from "../components/background/SignalCard";
+import SignalCard from "../components/analysis/SignalCard";
 
 describe("SignalCard Component", () => {
   test("returns null for empty signal", () => {

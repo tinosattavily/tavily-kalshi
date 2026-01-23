@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import ReportCard from "../components/background/ReportCard";
+import ReportCard from "../components/analysis/ReportCard";
 
 describe("ReportCard Component", () => {
   const mockEventContext = {

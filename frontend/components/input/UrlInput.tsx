@@ -57,7 +57,7 @@ export default function UrlInputBar({
       <input
         id="url-input"
         type="text"
-        placeholder="Enter Polymarket URL"
+        placeholder="Enter Kalshi market URL"
         value={url || ""}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}

@@ -3,19 +3,19 @@
 import React, { useEffect, useState, useRef } from "react";
 import { RefreshCw, History } from "lucide-react";
 import clsx from "clsx";
-import RecentMarketCard, { RecentRun } from "./RecentMarketCard";
+import HistoryCard, { RecentRun } from "./HistoryCard";
 
-interface RecentSessionsProps {
+interface HistorySidebarProps {
   onRunSelect: (run: RecentRun) => void;
   activeRunId?: string;
   refreshTrigger?: number; // Increment this to trigger refresh
 }
 
-export default function RecentSessions({
+export default function HistorySidebar({
   onRunSelect,
   activeRunId,
   refreshTrigger = 0,
-}: RecentSessionsProps): React.JSX.Element {
+}: HistorySidebarProps): React.JSX.Element {
   const [runs, setRuns] = useState<RecentRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +196,7 @@ export default function RecentSessions({
             {runs.map((run) => {
               const runId = run.run_id || run._id;
               return (
-                <RecentMarketCard
+                <HistoryCard
                   key={runId}
                   run={run}
                   onClick={onRunSelect}

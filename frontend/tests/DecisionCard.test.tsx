@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import DecisionCard from "../components/background/DecisionCard";
+import DecisionCard from "../components/analysis/DecisionCard";
 
 describe("DecisionCard Component", () => {
   test("returns null when both decision and signal are missing", () => {
