@@ -1,5 +1,5 @@
 # =============================================================================
-# .gitignore - Comprehensive ignore rules for Tavily Polymarket Signals
+# .gitignore - Comprehensive ignore rules for Tavily Kalshi
 # =============================================================================
 # This file ensures build artifacts, dependencies, cache files, and sensitive
 # data are not committed to version control.
