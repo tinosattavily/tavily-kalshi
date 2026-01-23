@@ -1,5 +1,5 @@
 # app/domains/markets/parsing.py
-"""URL and price parsing utilities for Polymarket."""
+"""URL and price parsing utilities for Polymarket and Kalshi."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import json
 import re
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlparse
 
 
 def extract_slug_from_url(url: str | None) -> Optional[str]:
@@ -81,3 +82,68 @@ def parse_end_date(value: Optional[str]) -> Optional[datetime]:
         return datetime.fromisoformat(value)
     except Exception:
         return None
+
+
+# Kalshi URL patterns
+KALSHI_DOMAINS = ["kalshi.com", "kalshi.co"]
+KALSHI_MARKET_PATTERN = re.compile(r"/markets/([A-Z0-9\-]+)", re.IGNORECASE)
+KALSHI_EVENT_PATTERN = re.compile(r"/events/([A-Z0-9\-]+)", re.IGNORECASE)
+
+
+def is_kalshi_url(url: str) -> bool:
+    """Check if URL is a Kalshi market or event URL."""
+    try:
+        parsed = urlparse(url)
+        return any(domain in parsed.netloc for domain in KALSHI_DOMAINS)
+    except Exception:
+        return False
+
+
+def extract_kalshi_ticker_from_url(url: str) -> Optional[str]:
+    """Extract market ticker from Kalshi URL.
+
+    Examples:
+        https://kalshi.com/markets/INXD-25JAN17-B24999 -> INXD-25JAN17-B24999
+    """
+    match = KALSHI_MARKET_PATTERN.search(url)
+    return match.group(1) if match else None
+
+
+def extract_kalshi_event_ticker_from_url(url: str) -> Optional[str]:
+    """Extract event ticker from Kalshi URL.
+
+    Examples:
+        https://kalshi.com/events/INXD-25JAN17 -> INXD-25JAN17
+    """
+    match = KALSHI_EVENT_PATTERN.search(url)
+    return match.group(1) if match else None
+
+
+def parse_kalshi_url(url: str) -> Tuple[Optional[str], Optional[str], str]:
+    """Parse Kalshi URL to extract ticker and type.
+
+    Returns:
+        Tuple of (ticker, event_ticker, url_type)
+        url_type is "market", "event", or "unknown"
+    """
+    ticker = extract_kalshi_ticker_from_url(url)
+    if ticker:
+        # Market URLs have event ticker embedded: INXD-25JAN17-B24999 -> INXD-25JAN17
+        # Split from the right, taking all but the last segment
+        parts = ticker.rsplit("-", 1)
+        if len(parts) == 2 and parts[1].startswith("B"):
+            # This is a bracket market, event ticker is everything before last dash
+            event_ticker = parts[0]
+        else:
+            # Try to extract event ticker from URL path
+            event_ticker = extract_kalshi_event_ticker_from_url(url)
+            if not event_ticker:
+                # Fallback: assume first parts are event ticker
+                event_ticker = "-".join(ticker.split("-")[:-1]) if "-" in ticker else None
+        return ticker, event_ticker, "market"
+
+    event_ticker = extract_kalshi_event_ticker_from_url(url)
+    if event_ticker:
+        return None, event_ticker, "event"
+
+    return None, None, "unknown"

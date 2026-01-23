@@ -5,6 +5,7 @@ from app.infrastructure.http.cache import (
     RedisCache,
     TTLCache,
     cached,
+    kalshi_cache,
     openai_cache,
     polymarket_cache,
     tavily_cache,
@@ -19,6 +20,7 @@ from app.infrastructure.http.polymarket import (
 from app.infrastructure.http.resilience import (
     CircuitBreaker,
     CircuitState,
+    kalshi_circuit,
     openai_circuit,
     polymarket_circuit,
     tavily_circuit,
@@ -37,6 +39,7 @@ __all__ = [
     "RedisCache",
     "TTLCache",
     "cached",
+    "kalshi_cache",
     "openai_cache",
     "polymarket_cache",
     "tavily_cache",
@@ -49,6 +52,7 @@ __all__ = [
     # Resilience
     "CircuitBreaker",
     "CircuitState",
+    "kalshi_circuit",
     "openai_circuit",
     "polymarket_circuit",
     "tavily_circuit",

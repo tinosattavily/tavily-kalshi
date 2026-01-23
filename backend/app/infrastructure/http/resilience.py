@@ -121,6 +121,7 @@ class CircuitBreaker:
 polymarket_circuit = CircuitBreaker(failure_threshold=5, timeout=30.0)
 tavily_circuit = CircuitBreaker(failure_threshold=5, timeout=60.0)
 openai_circuit = CircuitBreaker(failure_threshold=3, timeout=120.0)
+kalshi_circuit = CircuitBreaker(failure_threshold=5, timeout=30.0)
 
 
 def with_retry(

@@ -26,6 +26,30 @@ class PolymarketAPIError(ExternalAPIError):
     pass
 
 
+class KalshiAPIError(ExternalAPIError):
+    """Raised when Kalshi API call fails."""
+
+    pass
+
+
+class KalshiAuthenticationError(KalshiAPIError):
+    """Raised when Kalshi authentication fails."""
+
+    pass
+
+
+class KalshiMarketNotFoundError(KalshiAPIError):
+    """Raised when Kalshi market is not found."""
+
+    pass
+
+
+class KalshiEventNotFoundError(KalshiAPIError):
+    """Raised when Kalshi event is not found."""
+
+    pass
+
+
 class TavilyAPIError(ExternalAPIError):
     """Raised when Tavily API call fails."""
 
