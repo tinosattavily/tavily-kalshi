@@ -32,7 +32,7 @@ This system automates the analysis process by:
 ## Architecture
 
 - **Backend**: FastAPI (Python 3.11) with async/await patterns, deployed on AWS Elastic Beanstalk
-- **Frontend**: Next.js 15 with TypeScript and Tailwind CSS, deployed on Vercel
+- **Frontend**: Next.js 16 with TypeScript and Tailwind CSS, deployed on Vercel
 - **Database**: MongoDB Atlas for persistent storage of analysis runs and market history
 - **Cache**: Redis (optional) or in-memory caching for API responses
 - **External APIs**:
@@ -499,7 +499,7 @@ Backend dependencies are managed in `backend/requirements.txt`:
 
 Frontend dependencies are managed in `frontend/package.json`:
 
-- **Framework**: Next.js 15, React 19
+- **Framework**: Next.js 16, React 19
 - **Styling**: Tailwind CSS
 - **Icons**: Lucide React
 - **Testing**: Jest, React Testing Library
