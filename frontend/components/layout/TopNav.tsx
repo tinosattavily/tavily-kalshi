@@ -1,8 +1,6 @@
 import React from "react";
 import Image from "next/image";
 import { Courier_Prime } from "next/font/google";
-import tavilyLogo from "../../tavily-trans.png";
-import openaiLogo from "../../openai-trans.png";
 
 const courierPrime = Courier_Prime({
   subsets: ["latin"],
@@ -20,8 +18,7 @@ export default function TopNav() {
         </span>
       </div>
       <span className="inline-flex items-center px-4 py-3 gap-6">
-        <Image src={tavilyLogo} alt="Tavily logo" className="h-7 w-7 object-contain" />
-        <Image src={openaiLogo} alt="OpenAI logo" className="h-7 w-7 object-contain" />
+        <Image src="/tavily-full-logo.svg" alt="Tavily logo" width={28} height={28} className="h-7 w-7 object-contain" />
       </span>
     </div>
   );
