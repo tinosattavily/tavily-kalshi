@@ -1,6 +1,6 @@
 # Prophily
 
-A multi-agent AI system that analyzes Polymarket prediction markets and generates intelligent trading signals by combining real-time market data, news aggregation, and AI-powered analysis.
+A multi-agent AI system that analyzes Kalshi prediction markets and generates intelligent trading signals by combining real-time market data, news aggregation, and AI-powered analysis.
 
 ## Project Summary and Motivation
 
@@ -11,7 +11,7 @@ A multi-agent AI system that analyzes Polymarket prediction markets and generate
 Prediction markets contain a lot of information, but turning a single market URL into a *clear, actionable, and explainable* view is still very manual:
 
 - You have to understand the contract details and resolution criteria.
-- You have to read news, macro context, and on-chain / platform-specific details.
+- You have to read news, macro context, and platform-specific details.
 - You have to translate all of that into a probability, an edge vs current prices, and a position size.
 
 This system automates the analysis process by:
@@ -25,18 +25,18 @@ This system automates the analysis process by:
 
 - **Multi-Agent Orchestration**: Specialized AI agents handle market data, news aggregation, signal generation, and reporting
 - **Real-Time Phased Analysis**: Asynchronous processing that updates results incrementally as analysis progresses
-- **Market Intelligence**: Combines Polymarket market data with Tavily news aggregation and sentiment analysis
+- **Market Intelligence**: Combines Kalshi market data with Tavily news aggregation and sentiment analysis
 - **Trading Signals**: Generates directional signals (up/down/flat) with confidence levels, edge calculations, and Kelly sizing recommendations
 - **Interactive Dashboard**: Modern Next.js frontend with real-time polling and market selection for events with multiple markets
 
 ## Architecture
 
 - **Backend**: FastAPI (Python 3.11) with async/await patterns, deployed on AWS Elastic Beanstalk
-- **Frontend**: Next.js 16 with TypeScript and Tailwind CSS, deployed on Vercel
+- **Frontend**: Next.js 15 with TypeScript and Tailwind CSS, deployed on Vercel
 - **Database**: MongoDB Atlas for persistent storage of analysis runs and market history
 - **Cache**: Redis (optional) or in-memory caching for API responses
-- **External APIs**: 
-  - Polymarket Gamma API (market data)
+- **External APIs**:
+  - Kalshi API (market data)
   - Tavily Search API (news aggregation)
   - OpenAI API (AI analysis and signal generation)
 
@@ -57,9 +57,13 @@ You'll need API keys for the following services:
 
 2. **Tavily API Key** (required) - For news aggregation
 
-3. **MongoDB Connection String** (required) - For data persistence
+3. **Kalshi API Key** (required) - For market data
+   - Get your API key from: https://kalshi.com/account/api
+   - You'll need both a Key ID and a Private Key (PEM format)
 
-4. **Redis** (optional) - For production caching
+4. **MongoDB Connection String** (required) - For data persistence
+
+5. **Redis** (optional) - For production caching
 
 **Note**: These are provided in the deployed version for the purposes of the assignment as env vars in AWS Beanstalk
 
@@ -69,7 +73,7 @@ You'll need API keys for the following services:
 
 ```bash
 git clone <repository-url>
-cd tavily-proj
+cd prophecy-pred-markets
 ```
 
 ### 2. Backend Setup
@@ -102,6 +106,13 @@ OPENAI_API_KEY=your_openai_api_key_here
 TAVILY_API_KEY=your_tavily_api_key_here
 MONGODB_URI=your_mongodb_connection_string_here
 
+# Kalshi API Configuration
+KALSHI_API_KEY_ID=your_kalshi_api_key_id_here
+KALSHI_PRIVATE_KEY_PATH=/path/to/your/kalshi_private_key.pem
+# Or use base64-encoded key instead:
+# KALSHI_PRIVATE_KEY_BASE64=your_base64_encoded_private_key_here
+KALSHI_ENV=demo  # or "production" for live markets
+
 # Optional Configuration
 LOG_LEVEL=INFO
 USE_REDIS_CACHE=false
@@ -109,6 +120,8 @@ REDIS_URL=redis://localhost:6379/0
 CORS_ORIGINS=http://localhost:3000
 ENVIRONMENT=development
 ```
+
+See `.env.example` for a complete template with all available options.
 
 ### 5. Verify Installation
 
@@ -136,9 +149,9 @@ Visit `http://localhost:3000` to see the dashboard.
 
 2. **Open the dashboard** at `http://localhost:3000`
 
-3. **Paste a Polymarket URL** into the input field:
+3. **Paste a Kalshi URL** into the input field:
    ```
-   https://polymarket.com/event/fed-decision-in-december
+   https://kalshi.com/markets/kxbtc/bitcoin-above-100000-on-december-31
    ```
    - Supports both event URLs and direct market URLs
    - If an event has multiple markets, you'll be prompted to select one
@@ -157,7 +170,7 @@ Visit `http://localhost:3000` to see the dashboard.
 curl -X POST http://localhost:8000/api/analyze/start \
   -H "Content-Type: application/json" \
   -d '{
-    "market_url": "https://polymarket.com/event/fed-decision-in-december",
+    "market_url": "https://kalshi.com/markets/kxbtc/bitcoin-above-100000-on-december-31",
     "horizon": "24h",
     "strategy_preset": "Balanced"
   }'
@@ -201,7 +214,7 @@ The response includes phased status and partial results:
 curl -X POST http://localhost:8000/api/analyze \
   -H "Content-Type: application/json" \
   -d '{
-    "market_url": "https://polymarket.com/event/fed-decision-in-december",
+    "market_url": "https://kalshi.com/markets/kxbtc/bitcoin-above-100000-on-december-31",
     "horizon": "24h",
     "strategy_preset": "Balanced"
   }'
@@ -215,7 +228,7 @@ You can customize the analysis behavior:
 
 ```json
 {
-  "market_url": "https://polymarket.com/event/...",
+  "market_url": "https://kalshi.com/markets/...",
   "horizon": "24h",
   "strategy_preset": "Balanced",
   "configuration": {
@@ -332,6 +345,9 @@ The backend is configured for deployment on AWS Elastic Beanstalk:
 2. Set environment variables in the Elastic Beanstalk console:
    - `OPENAI_API_KEY`
    - `TAVILY_API_KEY`
+   - `KALSHI_API_KEY_ID`
+   - `KALSHI_PRIVATE_KEY_BASE64` (base64-encoded private key)
+   - `KALSHI_ENV` (demo or production)
    - `MONGODB_URI`
    - `USE_REDIS_CACHE` (optional)
    - `REDIS_URL` (if using Redis)
@@ -366,6 +382,9 @@ vercel --prod
 # Required
 OPENAI_API_KEY=your_production_openai_key
 TAVILY_API_KEY=your_production_tavily_key
+KALSHI_API_KEY_ID=your_kalshi_api_key_id
+KALSHI_PRIVATE_KEY_BASE64=your_base64_encoded_private_key
+KALSHI_ENV=production
 MONGODB_URI=your_production_mongodb_uri
 
 # Recommended for production
@@ -379,22 +398,25 @@ ENVIRONMENT=production
 ## Project Structure
 
 ```
-tavily-proj/
+prophecy-pred-markets/
 ├── backend/                    # FastAPI backend application
 │   ├── app/
 │   │   ├── agents/            # Multi-agent orchestration
-│   │   │   ├── graph.py      # Main analysis graph
+│   │   │   ├── graph.py       # Main analysis graph
 │   │   │   ├── market_agent.py
 │   │   │   ├── event_agent.py
 │   │   │   ├── news_agent.py
 │   │   │   ├── prob_agent.py
 │   │   │   ├── strategy_agent.py
 │   │   │   └── report_agent.py
-│   │   ├── core/              # Core utilities
-│   │   │   ├── cache.py
-│   │   │   ├── logging_config.py
-│   │   │   ├── resilience.py
-│   │   │   └── sentiment_analyzer.py
+│   │   ├── config/            # Configuration
+│   │   │   ├── settings.py
+│   │   │   └── constants.py
+│   │   ├── infrastructure/    # External service clients
+│   │   │   └── http/
+│   │   │       ├── kalshi.py      # Kalshi API client
+│   │   │       ├── kalshi_auth.py # Kalshi authentication
+│   │   │       └── cache.py
 │   │   ├── db/                # Database layer
 │   │   │   ├── async_client.py
 │   │   │   ├── async_repositories.py
@@ -405,9 +427,9 @@ tavily-proj/
 │   │   ├── schemas/           # Pydantic models
 │   │   │   └── api.py
 │   │   ├── services/          # Business logic
+│   │   │   ├── kalshi/        # Kalshi service layer
 │   │   │   ├── phased_analysis.py
 │   │   │   └── run_snapshot.py
-│   │   ├── config.py          # Configuration
 │   │   └── main.py            # FastAPI app entry point
 │   ├── tests/                 # Backend tests
 │   ├── requirements.txt       # Python dependencies
@@ -416,16 +438,37 @@ tavily-proj/
 ├── frontend/                   # Next.js frontend application
 │   ├── app/                   # Next.js App Router pages
 │   │   ├── api/              # API route handlers (proxies to backend)
-│   │   ├── markets/          # Market detail pages
 │   │   └── page.tsx          # Main dashboard page
 │   ├── components/           # React components
-│   │   ├── background/      # Main UI components
-│   │   └── skeletons/       # Loading skeletons
-│   ├── lib/                 # Utilities
-│   │   ├── api.ts           # API client helpers
-│   │   └── logger.ts        # Logging utilities
-│   ├── tests/               # Frontend tests
-│   └── package.json         # Node.js dependencies
+│   │   ├── analysis/         # Analysis result components
+│   │   │   ├── AnalysisResults.tsx
+│   │   │   ├── MarketCard.tsx
+│   │   │   ├── NewsCard.tsx
+│   │   │   ├── SignalCard.tsx
+│   │   │   └── ReportCard.tsx
+│   │   ├── layout/           # Layout components
+│   │   │   ├── AppShell.tsx
+│   │   │   ├── TopNav.tsx
+│   │   │   └── HistorySidebar.tsx
+│   │   ├── input/            # Input components
+│   │   │   ├── UrlInput.tsx
+│   │   │   └── EmptyState.tsx
+│   │   ├── ui/               # Shared UI components
+│   │   │   ├── Toast.tsx
+│   │   │   └── ErrorBoundary.tsx
+│   │   └── skeletons/        # Loading skeletons
+│   ├── hooks/                # Custom React hooks
+│   │   ├── useAnalysisPolling.ts
+│   │   ├── useAnalysisSubmit.ts
+│   │   └── useRecentRuns.ts
+│   ├── types/                # TypeScript type definitions
+│   │   ├── analysis.ts
+│   │   └── market.ts
+│   ├── lib/                  # Utilities
+│   │   ├── api.ts            # API client helpers
+│   │   └── logger.ts         # Logging utilities
+│   ├── tests/                # Frontend tests
+│   └── package.json          # Node.js dependencies
 ├── docs/                     # Additional documentation
 │   ├── architecture.md
 │   ├── data_model.md
@@ -445,8 +488,9 @@ Backend dependencies are managed in `backend/requirements.txt`:
 
 - **Web Framework**: FastAPI, Uvicorn, Gunicorn
 - **Database**: Motor (async MongoDB driver), PyMongo
-- **HTTP Clients**: aiohttp, requests
+- **HTTP Clients**: httpx (async), aiohttp
 - **AI/ML**: OpenAI Python SDK
+- **Cryptography**: cryptography (for Kalshi RSA-PSS signing)
 - **Utilities**: Pydantic, structlog, tenacity (retries), python-dotenv
 - **Cache**: Redis (optional)
 - **Testing**: pytest, pytest-asyncio, pytest-cov
@@ -455,7 +499,7 @@ Backend dependencies are managed in `backend/requirements.txt`:
 
 Frontend dependencies are managed in `frontend/package.json`:
 
-- **Framework**: Next.js 16, React 19
+- **Framework**: Next.js 15, React 19
 - **Styling**: Tailwind CSS
 - **Icons**: Lucide React
 - **Testing**: Jest, React Testing Library
@@ -470,6 +514,12 @@ Frontend dependencies are managed in `frontend/package.json`:
 - Check network connectivity to MongoDB Atlas
 - Verify MongoDB credentials are valid
 - Ensure IP whitelist includes your server IP
+
+**Kalshi API Errors**
+- Verify `KALSHI_API_KEY_ID` and private key are set correctly
+- Ensure private key is in PEM format (RSA)
+- Check `KALSHI_ENV` is set to "demo" for testing or "production" for live
+- Verify API key has appropriate permissions
 
 **OpenAI API Errors**
 - Check `OPENAI_API_KEY` is set correctly
