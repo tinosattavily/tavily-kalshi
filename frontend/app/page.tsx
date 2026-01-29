@@ -1,11 +1,7 @@
 "use client";
 
-import React from "react";
-
 import Layout from "../components/Layout";
 
-
-export default function HomePage() {
+export default function HomePage(): React.JSX.Element {
   return <Layout />;
 }
-

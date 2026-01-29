@@ -1,14 +1,34 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
-import { RefreshCw, History } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+
+import { History, RefreshCw } from "lucide-react";
 import clsx from "clsx";
+
 import RecentMarketCard, { RecentRun } from "./RecentMarketCard";
+import { logger } from "../../lib/logger";
+
+const REQUEST_TIMEOUT_MS = 30000;
 
 interface RecentSessionsProps {
   onRunSelect: (run: RecentRun) => void;
   activeRunId?: string;
-  refreshTrigger?: number; // Increment this to trigger refresh
+  refreshTrigger?: number;
+}
+
+function isAbortError(err: unknown): boolean {
+  if (err instanceof DOMException && err.name === "AbortError") return true;
+  if (!(err instanceof Error)) return false;
+  return err.name === "AbortError" || err.message === "terminated" || err.message.includes("aborted");
+}
+
+async function parseErrorResponse(response: Response): Promise<{ detail?: string; error?: string }> {
+  try {
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { error: response.statusText || `HTTP ${response.status}` };
+  }
 }
 
 export default function RecentSessions({
@@ -21,146 +41,126 @@ export default function RecentSessions({
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const fetchRecentRuns = async () => {
-    // Cancel any pending requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+  // Check resolutions for past markets in the background
+  const checkResolutions = useCallback(async () => {
+    try {
+      const response = await fetch("/api/runs/check-resolutions", {
+        method: "POST",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.updated > 0) {
+          logger.info(`Updated ${data.updated} market resolutions`);
+          // Refresh runs to show updated resolution data
+          return true;
+        }
+      }
+    } catch (err) {
+      // Silently fail - resolution checking is optional
+      logger.debug("Resolution check failed:", err);
     }
+    return false;
+  }, []);
 
-    // Create new AbortController for this request
+  const fetchRecentRuns = useCallback(async (checkResolutionsFirst = false) => {
+    abortControllerRef.current?.abort();
+
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     setIsLoading(true);
     setError(null);
-    
-    // Add timeout to prevent hanging requests (30 seconds)
+
+    // Check resolutions in background before fetching runs
+    if (checkResolutionsFirst) {
+      await checkResolutions();
+    }
+
     const timeoutId = setTimeout(() => {
       if (!abortController.signal.aborted) {
         abortController.abort();
       }
-    }, 30000);
-    
+    }, REQUEST_TIMEOUT_MS);
+
     try {
       const response = await fetch("/api/runs/recent?limit=20", {
         signal: abortController.signal,
       });
-      
+
       clearTimeout(timeoutId);
-      
-      // Check if request was aborted before processing response
-      if (abortController.signal.aborted) {
-        return;
-      }
-      
+
+      if (abortController.signal.aborted) return;
+
       if (!response.ok) {
-        // Try to parse error response, but handle cases where response body might be empty
-        let errorData: any = {};
-        try {
-          const text = await response.text();
-          if (text) {
-            errorData = JSON.parse(text);
-          }
-        } catch {
-          // If parsing fails, use status text or default message
-          errorData = { error: response.statusText || `HTTP ${response.status}` };
-        }
-        
-        // Check again if aborted after async operations
-        if (abortController.signal.aborted) {
-          return;
-        }
-        
+        const errorData = await parseErrorResponse(response);
+        if (abortController.signal.aborted) return;
         throw new Error(
           errorData.detail || errorData.error || `Failed to fetch recent runs (${response.status})`,
         );
       }
-      
+
       const data = await response.json();
-      
-      // Only update state if request wasn't aborted
+
       if (!abortController.signal.aborted) {
         setRuns(data.runs || []);
       }
     } catch (err) {
-      // Clear timeout if error occurs
       clearTimeout(timeoutId);
-      // Check if request was aborted - this includes AbortError and DOMException with "terminated" message
-      if (
-        abortController.signal.aborted ||
-        (err instanceof Error && (
-          err.name === "AbortError" ||
-          err.message === "terminated" ||
-          err.message.includes("aborted")
-        )) ||
-        (err instanceof DOMException && err.name === "AbortError")
-      ) {
-        // Silently ignore abort errors
+
+      if (abortController.signal.aborted || isAbortError(err)) {
         return;
       }
-      
-      // Only set error if request wasn't aborted
+
       if (!abortController.signal.aborted) {
         let errorMessage = "Failed to load recent sessions";
-        if (err instanceof Error) {
-          // Don't show "terminated" as error message - it's not user-friendly
-          if (err.message === "terminated" || err.message.includes("aborted")) {
-            errorMessage = "Request was cancelled";
-          } else {
-            errorMessage = err.message;
-          }
+        if (err instanceof Error && !isAbortError(err)) {
+          errorMessage = err.message;
         }
         setError(errorMessage);
-        console.error("Error fetching recent runs:", err);
+        logger.error("Error fetching recent runs:", err);
       }
     } finally {
-      // Only update loading state if request wasn't aborted
       if (!abortController.signal.aborted) {
         setIsLoading(false);
       }
     }
-  };
+  }, [checkResolutions]);
 
   useEffect(() => {
-    fetchRecentRuns();
-    // Cleanup: abort request on unmount or when refreshTrigger changes
+    // Check resolutions on initial load
+    fetchRecentRuns(true);
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      abortControllerRef.current?.abort();
     };
-  }, [refreshTrigger]);
+  }, [refreshTrigger, fetchRecentRuns]);
 
   return (
     <div
       id="recent-sessions"
-      className="h-full flex flex-col bg-white/90 border-0"
+      className="h-full flex flex-col bg-transparent border-0"
     >
-      {/* Header */}
-      <div className="p-4 bg-white/90">
-        <div className="flex items-center justify-between mb-2">
+      {/* Header - stays fixed */}
+      <div className="flex-shrink-0 p-4">
+        <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-800 flex items-center gap-2">
             <History className="w-5 h-5" />
             Recent Sessions
           </h2>
           <button
-            onClick={fetchRecentRuns}
+            onClick={() => fetchRecentRuns(true)}
             disabled={isLoading}
             className="p-1.5 rounded-md hover:bg-neutral-200 transition-colors disabled:opacity-50"
-            title="Refresh recent sessions"
+            title="Refresh recent sessions and check resolutions"
           >
             <RefreshCw
               className={clsx("w-4 h-4 text-neutral-600", isLoading && "animate-spin")}
             />
           </button>
         </div>
-        <p className="text-xs text-neutral-500">
-          Click a card to view analysis
-        </p>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 border-0">
+      {/* Content - scrollable */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-minimal p-4 border-0">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-sm text-neutral-500">Loading...</div>
@@ -199,7 +199,13 @@ export default function RecentSessions({
           </div>
         )}
       </div>
+
+      {/* Footer with info - stays fixed */}
+      <div className="flex-shrink-0 border-t border-neutral-300 p-3">
+        <p className="text-xs text-neutral-500 text-center">
+          Click a card to view analysis
+        </p>
+      </div>
     </div>
   );
 }
-

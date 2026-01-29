@@ -9,7 +9,7 @@ import aiohttp
 import pytest
 
 from app.core.polymarket_utils import (
-    _extract_series_comment_count,
+    _get_series_comment_count,
     extract_slug_from_url,
     fetch_json_async,
     fetch_order_book_async,
@@ -20,8 +20,8 @@ from app.core.polymarket_utils import (
 )
 
 
-def test_extract_series_comment_count_valid():
-    """Test _extract_series_comment_count with valid series data."""
+def test_get_series_comment_count_valid():
+    """Test _get_series_comment_count with valid series data."""
     event_data = {
         "series": [
             {
@@ -30,18 +30,18 @@ def test_extract_series_comment_count_valid():
         ]
     }
 
-    result = _extract_series_comment_count(event_data)
+    result = _get_series_comment_count(event_data)
     assert result == 10
 
 
-def test_extract_series_comment_count_missing():
-    """Test _extract_series_comment_count with missing/invalid series."""
+def test_get_series_comment_count_missing():
+    """Test _get_series_comment_count with missing/invalid series."""
     event_data = {}
-    result = _extract_series_comment_count(event_data)
+    result = _get_series_comment_count(event_data)
     assert result is None
 
     event_data2 = {"series": []}
-    result2 = _extract_series_comment_count(event_data2)
+    result2 = _get_series_comment_count(event_data2)
     assert result2 is None
 
 
@@ -168,21 +168,18 @@ async def test_fetch_json_async_success():
 async def test_fetch_json_async_error():
     """Test fetch_json_async with HTTP error."""
 
-    # Patch the _fetch_json_impl_async to raise an exception
+    # Patch the _fetch_json_impl to raise an exception
     async def mock_fetch_impl(url, params=None, timeout=10):
-        # Simulate aiohttp raising ClientResponseError
-        error = aiohttp.ClientResponseError(
-            request_info=None, history=(), status=500, message="Server Error"
-        )
-        raise error
+        # Simulate aiohttp raising a generic exception (ClientResponseError needs request_info)
+        raise RuntimeError("Server Error (500)")
 
     # Ensure cache is empty and circuit breaker allows attempts
     with (
         patch("app.core.polymarket_utils.polymarket_cache.get", return_value=None),
         patch("app.core.polymarket_utils.polymarket_circuit.can_attempt", return_value=True),
-        patch("app.core.polymarket_utils._fetch_json_impl_async", side_effect=mock_fetch_impl),
+        patch("app.core.polymarket_utils._fetch_json_impl", side_effect=mock_fetch_impl),
     ):
-        with pytest.raises(aiohttp.ClientResponseError):
+        with pytest.raises(RuntimeError, match="Server Error"):
             await fetch_json_async("https://example.com/api")
 
 

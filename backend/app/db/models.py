@@ -9,6 +9,8 @@ Horizon = Literal["intraday", "24h", "resolution"]
 SignalDirection = Literal["up", "down", "flat"]
 DecisionAction = Literal["BUY", "SELL", "HOLD"]
 ConfidenceLevel = Literal["low", "medium", "high"]
+PhaseStatus = Literal["pending", "done", "error"]
+ResolutionStatus = Literal["pending", "resolved_yes", "resolved_no", "voided", "unknown"]
 
 
 class StrategyParams(TypedDict, total=False):
@@ -118,10 +120,19 @@ class RunEnvMetadata(TypedDict, total=False):
 
 
 class RunStatus(TypedDict, total=False):
-    market: str  # "pending" | "done" | "error"
-    news: str  # "pending" | "done" | "error"
-    signal: str  # "pending" | "done" | "error"
-    report: str  # "pending" | "done" | "error"
+    market: PhaseStatus
+    news: PhaseStatus
+    signal: PhaseStatus
+    report: PhaseStatus
+
+
+class Resolution(TypedDict, total=False):
+    status: ResolutionStatus
+    winning_outcome: str  # "Yes", "No", or outcome name
+    resolved_at: str  # ISO timestamp when market resolved
+    final_yes_price: float  # 1.0 or 0.0 after resolution
+    final_no_price: float  # 0.0 or 1.0 after resolution
+    checked_at: str  # When we last checked for resolution
 
 
 class RunDocument(TypedDict, total=False):
@@ -146,6 +157,7 @@ class RunDocument(TypedDict, total=False):
     trace_id: NotRequired[ObjectId]
     status: RunStatus
     run_id: str  # String identifier for the run (used for polling)
+    resolution: Resolution  # Market resolution tracking
 
 
 class TraceDocument(TypedDict, total=False):

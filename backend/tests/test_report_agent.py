@@ -80,12 +80,8 @@ def test_generate_fallback_report_full_data():
         "edge_pct": 0.1,
         "notes": "Test notes",
     }
-    event_context = {"title": "Test Event"}
-    news_context = {"summary": "Test news"}
 
-    report = _generate_fallback_report(
-        market_snapshot, signal, decision, event_context, news_context
-    )
+    report = _generate_fallback_report(market_snapshot, signal, decision)
 
     assert "headline" in report
     assert "thesis" in report
@@ -103,12 +99,8 @@ def test_generate_fallback_report_missing_data():
     market_snapshot = {}
     signal = {}
     decision = {}
-    event_context = {}
-    news_context = None
 
-    report = _generate_fallback_report(
-        market_snapshot, signal, decision, event_context, news_context
-    )
+    report = _generate_fallback_report(market_snapshot, signal, decision)
 
     assert "headline" in report
     assert "thesis" in report
@@ -123,7 +115,7 @@ def test_generate_fallback_report_various_combinations():
         decision = {"action": action, "edge_pct": 0.1}
         signal = {"market_prob": 0.5, "model_prob": 0.6, "edge_pct": 0.1}
 
-        report = _generate_fallback_report(market_snapshot, signal, decision, {}, None)
+        report = _generate_fallback_report(market_snapshot, signal, decision)
 
         assert report["headline"] is not None
         assert report["thesis"] is not None
@@ -135,7 +127,6 @@ async def test_generate_report_with_openai_success():
     market_snapshot = {"question": "Test?", "yes_price": 0.5}
     signal = {"market_prob": 0.5, "model_prob": 0.6, "edge_pct": 0.1}
     decision = {"action": "BUY", "edge_pct": 0.1}
-    event_context = {"title": "Test Event"}
     news_context = {"summary": "Test news"}
 
     mock_report_data = {
@@ -167,7 +158,7 @@ async def test_generate_report_with_openai_success():
             )
 
             report = await _generate_report_with_openai(
-                market_snapshot, signal, decision, event_context, news_context
+                market_snapshot, signal, decision, news_context
             )
 
             assert report["headline"] == "Test headline"
@@ -180,7 +171,6 @@ async def test_generate_report_with_openai_error():
     market_snapshot = {"question": "Test?", "yes_price": 0.5}
     signal = {"market_prob": 0.5}
     decision = {"action": "BUY"}
-    event_context = {}
     news_context = None
 
     with patch("app.agents.report_agent.get_openai_client") as mock_get_client:
@@ -188,7 +178,7 @@ async def test_generate_report_with_openai_error():
 
         with pytest.raises(RuntimeError):
             await _generate_report_with_openai(
-                market_snapshot, signal, decision, event_context, news_context
+                market_snapshot, signal, decision, news_context
             )
 
 
@@ -198,7 +188,6 @@ async def test_generate_report_with_openai_circuit_breaker():
     market_snapshot = {"question": "Test?", "yes_price": 0.5}
     signal = {"market_prob": 0.5}
     decision = {"action": "BUY"}
-    event_context = {}
     news_context = None
 
     with patch("app.agents.report_agent.get_openai_client") as mock_get_client:
@@ -208,7 +197,7 @@ async def test_generate_report_with_openai_circuit_breaker():
 
         with pytest.raises(RuntimeError):
             await _generate_report_with_openai(
-                market_snapshot, signal, decision, event_context, news_context
+                market_snapshot, signal, decision, news_context
             )
 
 

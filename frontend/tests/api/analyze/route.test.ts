@@ -31,6 +31,13 @@ describe("POST /api/analyze", () => {
   });
 
   test("proxies request to backend successfully", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "development",
+      writable: true,
+      configurable: true,
+    });
+
     const mockRequest = {
       json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
     };
@@ -44,20 +51,28 @@ describe("POST /api/analyze", () => {
 
     const response = await POST(mockRequest as any);
 
+    // The route now calls /api/analyze/start and includes signal
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://localhost:8000/api/analyze",
-      {
+      "http://localhost:8000/api/analyze/start",
+      expect.objectContaining({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ url: "https://polymarket.com/event/123" }),
-      }
+        signal: expect.any(AbortSignal),
+      })
     );
 
     expect(mockRequest.json).toHaveBeenCalled();
     const responseData = await response.json();
     expect(responseData).toEqual({ run_id: "test-run-id" });
+
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: originalNodeEnv,
+      writable: true,
+      configurable: true,
+    });
   });
 
   test("uses BACKEND_URL from environment", async () => {
@@ -77,7 +92,7 @@ describe("POST /api/analyze", () => {
     await POST(mockRequest as any);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "https://api.example.com/api/analyze",
+      "https://api.example.com/api/analyze/start",
       expect.any(Object)
     );
   });
@@ -212,17 +227,12 @@ describe("POST /api/analyze", () => {
 
     (global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await POST(mockRequest as any);
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
-    expect(responseData.details).toBe("Network error");
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Error proxying to backend:", expect.any(Error));
-
-    consoleErrorSpy.mockRestore();
+    expect(responseData.detail).toBe("Network error");
   });
 
   test("handles non-Error exception", async () => {
@@ -232,16 +242,12 @@ describe("POST /api/analyze", () => {
 
     (global.fetch as jest.Mock).mockRejectedValue("String error");
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await POST(mockRequest as any);
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
-    expect(responseData.details).toBe("String error");
-
-    consoleErrorSpy.mockRestore();
+    expect(responseData.detail).toBe("String error");
   });
 
   test("handles request.json() error", async () => {
@@ -249,15 +255,11 @@ describe("POST /api/analyze", () => {
       json: jest.fn().mockRejectedValue(new Error("Invalid JSON")),
     };
 
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
-
     const response = await POST(mockRequest as any);
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
-
-    consoleErrorSpy.mockRestore();
   });
 
   test("forwards request body correctly", async () => {
@@ -287,4 +289,3 @@ describe("POST /api/analyze", () => {
     );
   });
 });
-

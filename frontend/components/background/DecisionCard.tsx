@@ -1,30 +1,36 @@
 import React from "react";
 
-type Decision = {
+interface Decision {
   action?: string;
   side?: string;
   edge_pct?: number;
   toy_kelly_fraction?: number;
   notes?: string;
-};
+}
 
-// Also accept signal for recommended_action and recommended_size_fraction
-type Signal = {
+interface Signal {
   recommended_action?: string;
   recommended_size_fraction?: number;
   edge_pct?: number;
   confidence_level?: string;
-};
+}
 
-export default function DecisionCard({ 
-  decision, 
-  signal 
-}: { 
+interface DecisionCardProps {
   decision?: Decision;
   signal?: Signal;
-}) {
-  // Use signal fields if available, fallback to decision
-  const action = signal?.recommended_action 
+}
+
+function hasContent(obj: object | undefined | null): boolean {
+  return obj !== null && obj !== undefined && Object.keys(obj).length > 0;
+}
+
+export default function DecisionCard({ decision, signal }: DecisionCardProps): React.JSX.Element | null {
+  const hasDecision = hasContent(decision);
+  const hasSignal = hasContent(signal);
+
+  if (!hasDecision && !hasSignal) return null;
+
+  const action = signal?.recommended_action
     ? signal.recommended_action.replace(/_/g, " ").toUpperCase()
     : (decision?.action || "HOLD").replace(/_/g, " ").toUpperCase();
   const sizeFraction = signal?.recommended_size_fraction ?? decision?.toy_kelly_fraction;
@@ -32,11 +38,7 @@ export default function DecisionCard({
   const confidence = signal?.confidence_level;
   const notes = decision?.notes;
   const side = decision?.side;
-  
-  if (!decision && !signal) return null;
-  if (decision && Object.keys(decision).length === 0 && (!signal || Object.keys(signal).length === 0)) return null;
-  if (!decision && signal && Object.keys(signal).length === 0) return null;
-  
+
   return (
     <div
       id="decision-card"
@@ -75,5 +77,3 @@ export default function DecisionCard({
     </div>
   );
 }
-
-

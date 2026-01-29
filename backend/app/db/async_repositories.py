@@ -9,8 +9,12 @@ from bson.errors import InvalidId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 
+from app.core.logging_config import get_logger
 from app.db.async_client import get_async_db
 from app.db.models import EventDocument, MarketDocument, RunDocument, TraceDocument
+from app.db.utils import serialize_document
+
+logger = get_logger(__name__)
 
 _INDEXES_CREATED = False
 
@@ -55,18 +59,20 @@ async def ensure_indexes_async() -> None:
     _INDEXES_CREATED = True
 
 
-async def upsert_event_async(doc: EventDocument) -> EventDocument:
-    """Upsert an event document (async)."""
-    await ensure_indexes_async()
+async def _upsert_by_slug(
+    collection: AsyncIOMotorCollection,
+    doc: Dict[str, Any],
+    doc_type: str,
+) -> Dict[str, Any]:
+    """Generic upsert operation by slug field."""
     slug = doc.get("slug")
     if not slug:
-        raise ValueError("Event slug is required to upsert.")
+        raise ValueError(f"{doc_type} slug is required to upsert.")
 
     insert_doc = {k: v for k, v in doc.items() if k != "updated_at"}
     updated_at = doc.get("updated_at")
     update_doc = {"updated_at": updated_at} if updated_at else {}
 
-    collection = await events_collection_async()
     result = await collection.find_one_and_update(
         {"slug": slug},
         {"$setOnInsert": insert_doc, "$set": update_doc},
@@ -74,27 +80,20 @@ async def upsert_event_async(doc: EventDocument) -> EventDocument:
         return_document=ReturnDocument.AFTER,
     )
     return result  # type: ignore[return-value]
+
+
+async def upsert_event_async(doc: EventDocument) -> EventDocument:
+    """Upsert an event document (async)."""
+    await ensure_indexes_async()
+    collection = await events_collection_async()
+    return await _upsert_by_slug(collection, doc, "Event")  # type: ignore[return-value]
 
 
 async def upsert_market_async(doc: MarketDocument) -> MarketDocument:
     """Upsert a market document (async)."""
     await ensure_indexes_async()
-    slug = doc.get("slug")
-    if not slug:
-        raise ValueError("Market slug is required to upsert.")
-
-    insert_doc = {k: v for k, v in doc.items() if k != "updated_at"}
-    updated_at = doc.get("updated_at")
-    update_doc = {"updated_at": updated_at} if updated_at else {}
-
     collection = await markets_collection_async()
-    result = await collection.find_one_and_update(
-        {"slug": slug},
-        {"$setOnInsert": insert_doc, "$set": update_doc},
-        upsert=True,
-        return_document=ReturnDocument.AFTER,
-    )
-    return result  # type: ignore[return-value]
+    return await _upsert_by_slug(collection, doc, "Market")  # type: ignore[return-value]
 
 
 async def create_run_async(doc: RunDocument) -> ObjectId:
@@ -124,10 +123,6 @@ async def get_run_async(run_id: str) -> Optional[Dict[str, Any]]:
     try:
         await ensure_indexes_async()
     except Exception as e:
-        # Log but don't fail - indexes might already exist
-        from app.core.logging_config import get_logger
-
-        logger = get_logger(__name__)
         logger.warning("Failed to ensure indexes", error=str(e))
 
     try:
@@ -138,8 +133,6 @@ async def get_run_async(run_id: str) -> Optional[Dict[str, Any]]:
             object_id = ObjectId(run_id)
             doc = await collection.find_one({"_id": object_id})
             if doc:
-                from app.db.utils import serialize_document
-
                 return serialize_document(doc)
         except (InvalidId, TypeError):
             pass
@@ -147,15 +140,10 @@ async def get_run_async(run_id: str) -> Optional[Dict[str, Any]]:
         # Try run_id string (for new phased analysis)
         doc = await collection.find_one({"run_id": run_id})
         if doc:
-            from app.db.utils import serialize_document
-
             return serialize_document(doc)
 
         return None
     except Exception as e:
-        from app.core.logging_config import get_logger
-
-        logger = get_logger(__name__)
         logger.error("Error retrieving run", run_id=run_id, error=str(e), exc_info=True)
         raise
 
@@ -170,8 +158,6 @@ async def list_runs_by_market_async(market_id: str) -> List[Dict[str, Any]]:
 
     collection = await runs_collection_async()
     cursor = collection.find({"market_id": market_object_id}).sort("run_at", -1)
-    from app.db.utils import serialize_document
-
     return [serialize_document(doc) async for doc in cursor]
 
 
@@ -193,6 +179,84 @@ async def list_recent_runs_async(limit: int = 20) -> List[Dict[str, Any]]:
         "status.report": "done",
     }
     cursor = collection.find(query).sort("run_at", -1).limit(limit)
-    from app.db.utils import serialize_document
-
     return [serialize_document(doc) async for doc in cursor]
+
+
+async def get_runs_pending_resolution(limit: int = 50) -> List[Dict[str, Any]]:
+    """Get runs that need resolution checking.
+    
+    Returns runs where:
+    - resolution.status is None, "pending", or doesn't exist
+    - All phases are complete (status.report = "done")
+    - Has a valid slug
+    
+    Args:
+        limit: Maximum number of runs to return
+        
+    Returns:
+        List of run documents needing resolution check
+    """
+    await ensure_indexes_async()
+    collection = await runs_collection_async()
+    
+    query = {
+        # Must be a complete run
+        "status.report": "done",
+        # Has a valid slug
+        "slug": {"$exists": True, "$ne": "pending"},
+        # Resolution not yet determined (or pending)
+        "$or": [
+            {"resolution": {"$exists": False}},
+            {"resolution.status": {"$exists": False}},
+            {"resolution.status": "pending"},
+        ],
+    }
+    
+    cursor = collection.find(query).sort("run_at", -1).limit(limit)
+    return [serialize_document(doc) async for doc in cursor]
+
+
+async def update_run_resolution(run_id: str, resolution: Dict[str, Any]) -> bool:
+    """Update a run's resolution data.
+    
+    Args:
+        run_id: Run ID (string identifier)
+        resolution: Resolution data to set
+        
+    Returns:
+        True if update was successful, False otherwise
+    """
+    from datetime import datetime, timezone
+    
+    collection = await runs_collection_async()
+    
+    update_doc = {
+        "resolution": resolution,
+        "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+    }
+    
+    # Try by run_id string first
+    result = await collection.update_one(
+        {"run_id": run_id},
+        {"$set": update_doc},
+    )
+    
+    if result.matched_count > 0:
+        logger.info("Updated run resolution", run_id=run_id, modified=result.modified_count)
+        return True
+    
+    # Try by ObjectId
+    try:
+        object_id = ObjectId(run_id)
+        result = await collection.update_one(
+            {"_id": object_id},
+            {"$set": update_doc},
+        )
+        if result.matched_count > 0:
+            logger.info("Updated run resolution by ObjectId", run_id=run_id, modified=result.modified_count)
+            return True
+    except (InvalidId, TypeError):
+        pass
+    
+    logger.warning("Run not found for resolution update", run_id=run_id)
+    return False

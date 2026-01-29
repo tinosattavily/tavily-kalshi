@@ -2,49 +2,82 @@
 
 import React from "react";
 
-type EventContext = {
+interface EventContext {
   title?: string;
   image?: string;
-};
+}
 
-type StructuredReport = {
+interface StructuredReport {
   headline?: string;
   thesis?: string;
   bull_case?: string[];
   bear_case?: string[];
   key_risks?: string[];
   execution_notes?: string;
-  // Legacy fields
   title?: string;
   markdown?: string;
-};
+}
 
 type Report = string | StructuredReport | Record<string, unknown>;
 
+interface ReportCardProps {
+  report: Report;
+  eventContext?: EventContext | null;
+}
+
 function isStructuredReport(report: Report): report is StructuredReport {
-  return (
-    typeof report === "object" &&
-    report !== null &&
-    ("headline" in report || "thesis" in report || "bull_case" in report || "execution_notes" in report)
+  if (typeof report !== "object" || report === null) return false;
+  return "headline" in report || "thesis" in report || "bull_case" in report || "execution_notes" in report;
+}
+
+function hasStructuredContent(report: StructuredReport): boolean {
+  return Boolean(
+    report.headline ||
+      report.thesis ||
+      (report.bull_case && report.bull_case.length > 0) ||
+      (report.bear_case && report.bear_case.length > 0) ||
+      (report.key_risks && report.key_risks.length > 0) ||
+      report.execution_notes,
   );
 }
 
-export default function ReportCard({
-  report,
-  eventContext,
-}: {
-  report: Report;
-  eventContext?: EventContext | null;
-}) {
-  const structured = isStructuredReport(report) ? report : null;
-  const hasStructuredData = structured && (
-    structured.headline || 
-    structured.thesis || 
-    (structured.bull_case && structured.bull_case.length > 0) ||
-    (structured.bear_case && structured.bear_case.length > 0) ||
-    (structured.key_risks && structured.key_risks.length > 0) ||
-    structured.execution_notes
+interface BulletListProps {
+  items: string[];
+  title: string;
+  bgColor: string;
+  borderColor: string;
+  titleColor: string;
+  textColor: string;
+  bulletColor: string;
+}
+
+function BulletList({
+  items,
+  title,
+  bgColor,
+  borderColor,
+  titleColor,
+  textColor,
+  bulletColor,
+}: BulletListProps): React.JSX.Element {
+  return (
+    <div className={`rounded-xl ${bgColor} border ${borderColor} p-4`}>
+      <h4 className={`text-sm font-semibold uppercase tracking-[0.1em] ${titleColor} mb-3`}>{title}</h4>
+      <ul className="space-y-2">
+        {items.map((item, idx) => (
+          <li key={idx} className={`text-sm ${textColor} flex items-start gap-2`}>
+            <span className={`${bulletColor} mt-1`}>•</span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
+}
+
+export default function ReportCard({ report, eventContext }: ReportCardProps): React.JSX.Element {
+  const structured = isStructuredReport(report) ? report : null;
+  const showStructured = structured && hasStructuredContent(structured);
 
   return (
     <section className="mb-6 rounded-3xl border border-slate-100/50 bg-slate-50/40 backdrop-blur-xl p-8 shadow-[0_16px_40px_rgba(100,116,139,0.2)]">
@@ -81,108 +114,77 @@ export default function ReportCard({
         )}
       </div>
 
-      {hasStructuredData ? (
+      {showStructured && structured ? (
         <div className="flex flex-col gap-6">
-          {/* Headline */}
           {structured.headline && (
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                {structured.headline}
-              </h3>
-            </div>
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">{structured.headline}</h3>
           )}
 
-          {/* Thesis */}
           {structured.thesis && (
             <div>
               <h4 className="text-sm font-semibold uppercase tracking-[0.1em] text-slate-600 mb-2">
                 Thesis
               </h4>
-              <p className="text-sm leading-relaxed text-slate-700">
-                {structured.thesis}
-              </p>
+              <p className="text-sm leading-relaxed text-slate-700">{structured.thesis}</p>
             </div>
           )}
 
-          {/* Bull Case & Bear Case Side by Side */}
           {(structured.bull_case?.length || structured.bear_case?.length) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Bull Case */}
               {structured.bull_case && structured.bull_case.length > 0 && (
-                <div className="rounded-xl bg-emerald-50/60 border border-emerald-100/50 p-4">
-                  <h4 className="text-sm font-semibold uppercase tracking-[0.1em] text-emerald-700 mb-3">
-                    Bull Case
-                  </h4>
-                  <ul className="space-y-2">
-                    {structured.bull_case.map((point, idx) => (
-                      <li key={idx} className="text-sm text-emerald-800 flex items-start gap-2">
-                        <span className="text-emerald-500 mt-1">•</span>
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <BulletList
+                  items={structured.bull_case}
+                  title="Bull Case"
+                  bgColor="bg-emerald-50/60"
+                  borderColor="border-emerald-100/50"
+                  titleColor="text-emerald-900"
+                  textColor="text-emerald-900"
+                  bulletColor="text-emerald-900"
+                />
               )}
-
-              {/* Bear Case */}
               {structured.bear_case && structured.bear_case.length > 0 && (
-                <div className="rounded-xl bg-rose-50/60 border border-rose-100/50 p-4">
-                  <h4 className="text-sm font-semibold uppercase tracking-[0.1em] text-rose-700 mb-3">
-                    Bear Case
-                  </h4>
-                  <ul className="space-y-2">
-                    {structured.bear_case.map((point, idx) => (
-                      <li key={idx} className="text-sm text-rose-800 flex items-start gap-2">
-                        <span className="text-rose-500 mt-1">•</span>
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <BulletList
+                  items={structured.bear_case}
+                  title="Bear Case"
+                  bgColor="bg-rose-50/60"
+                  borderColor="border-rose-100/50"
+                  titleColor="text-rose-900"
+                  textColor="text-rose-900"
+                  bulletColor="text-rose-900"
+                />
               )}
             </div>
           )}
 
-          {/* Key Risks */}
           {structured.key_risks && structured.key_risks.length > 0 && (
-            <div className="rounded-xl bg-amber-50/60 border border-amber-100/50 p-4">
-              <h4 className="text-sm font-semibold uppercase tracking-[0.1em] text-amber-700 mb-3">
-                Key Risks
-              </h4>
-              <ul className="space-y-2">
-                {structured.key_risks.map((risk, idx) => (
-                  <li key={idx} className="text-sm text-amber-800 flex items-start gap-2">
-                    <span className="text-amber-500 mt-1">•</span>
-                    <span>{risk}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <BulletList
+              items={structured.key_risks}
+              title="Key Risks"
+              bgColor="bg-amber-50/60"
+              borderColor="border-amber-100/50"
+              titleColor="text-amber-700"
+              textColor="text-amber-800"
+              bulletColor="text-amber-500"
+            />
           )}
 
-          {/* Execution Notes */}
           {structured.execution_notes && (
             <div className="border-t border-slate-200/50 pt-4">
               <h4 className="text-sm font-semibold uppercase tracking-[0.1em] text-slate-600 mb-2">
                 Execution Notes
               </h4>
-              <p className="text-sm leading-relaxed text-slate-700">
-                {structured.execution_notes}
-              </p>
+              <p className="text-sm leading-relaxed text-slate-700">{structured.execution_notes}</p>
             </div>
           )}
         </div>
       ) : (
-        /* Fallback to legacy markdown rendering */
         <div className="text-sm text-slate-700">
           {typeof report === "object" && "markdown" in report && report.markdown ? (
             <div className="whitespace-pre-wrap">{String(report.markdown)}</div>
           ) : typeof report === "string" ? (
             <div className="whitespace-pre-wrap">{report}</div>
           ) : (
-            <div className="whitespace-pre-wrap font-mono text-xs">
-              {JSON.stringify(report, null, 2)}
-            </div>
+            <div className="whitespace-pre-wrap font-mono text-xs">{JSON.stringify(report, null, 2)}</div>
           )}
         </div>
       )}

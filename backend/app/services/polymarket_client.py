@@ -20,41 +20,18 @@ class PolymarketClient:
     async def get_event_and_markets(
         self, slug: str
     ) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Get event and markets by slug.
-
-        Args:
-            slug: Market or event slug
-
-        Returns:
-            Tuple of (event_dict, markets_list)
-        """
+        """Get event and markets by slug."""
         return await get_event_and_markets_by_slug(slug)
 
     async def fetch_order_book(self, token_id: str) -> Dict[str, Any]:
-        """Fetch order book for a token.
-
-        Args:
-            token_id: CLOB token ID
-
-        Returns:
-            Order book dictionary with bids, asks, best_bid, best_ask
-        """
+        """Fetch order book for a token."""
         return await fetch_order_book_async(token_id)
 
     async def fetch_json(self, url: str, params: Optional[Dict[str, Any]] = None) -> Any:
-        """Fetch JSON from a URL.
-
-        Args:
-            url: URL to fetch
-            params: Optional query parameters
-
-        Returns:
-            Parsed JSON response
-        """
+        """Fetch JSON from a URL."""
         return await fetch_json_async(url, params=params)
 
 
-# Module-level singleton instance
 _polymarket_client: Optional[PolymarketClient] = None
 
 

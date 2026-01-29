@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export function MarketSnapshotSkeleton() {
+export function MarketSnapshotSkeleton(): React.JSX.Element {
   return (
     <div
       className="rounded-3xl bg-white/30 p-6 shadow-[0_18px_45px_rgba(30,58,138,0.25)] backdrop-blur-[12px] overflow-visible animate-pulse"
@@ -49,4 +49,3 @@ export function MarketSnapshotSkeleton() {
     </div>
   );
 }
-

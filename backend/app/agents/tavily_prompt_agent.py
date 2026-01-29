@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
-from typing import Any, Dict, List, Literal, Optional, TypedDict
+from typing import Any
 
-from app.agents.state import AgentState
+from app.agents.state import AgentState, TavilyQuerySpec
 from app.core.logging_config import get_logger
 from app.services.openai_client import get_openai_client
 
@@ -16,17 +17,6 @@ try:
     import openai
 except ImportError:  # pragma: no cover - handled at runtime
     openai = None  # type: ignore[assignment]
-
-
-class TavilyQuerySpec(TypedDict, total=False):
-    """Structured specification for a single Tavily query."""
-
-    name: str
-    query: str
-    max_results: int
-    search_depth: Literal["basic", "advanced"]
-    timeframe: Optional[str]  # e.g. "24h", "7d", "30d"
-    notes: Optional[str]
 
 
 SYSTEM_PROMPT = """You are a research director for a prediction-market analysis system.
@@ -81,60 +71,57 @@ Strategy preset: {strategy_preset}
 Generate 1–3 Tavily query specifications optimized for this market and horizon.""".strip()
 
 
-def parse_tavily_specs(raw_json: dict) -> List[TavilyQuerySpec]:
-    """Convert raw LLM JSON into a list of TavilyQuerySpec, with light validation."""
-    queries: List[TavilyQuerySpec] = []
+def _parse_max_results(value: Any) -> int:
+    """Parse and clamp max_results to valid range (5-12), defaulting to 8."""
+    if value is None:
+        return 8
+    try:
+        return max(5, min(12, int(value)))
+    except (ValueError, TypeError):
+        return 8
 
+
+def _parse_search_depth(value: Any) -> Literal["basic", "advanced"]:
+    """Parse search_depth, defaulting to 'basic' if invalid."""
+    if value in ("basic", "advanced"):
+        return value
+    return "basic"
+
+
+def parse_tavily_specs(raw_json: dict[str, Any]) -> list[TavilyQuerySpec]:
+    """Convert raw LLM JSON into a list of TavilyQuerySpec, with light validation."""
     raw_queries = raw_json.get("queries", [])
     if not isinstance(raw_queries, list):
         logger.warning(
             "LLM response 'queries' field is not a list",
             raw_type=type(raw_queries).__name__,
         )
-        return queries
+        return []
 
+    queries: list[TavilyQuerySpec] = []
     for item in raw_queries:
         if not isinstance(item, dict):
             logger.warning("Skipping invalid query item", item_type=type(item).__name__)
             continue
 
-        name = item.get("name") or "news"
         query = item.get("query") or ""
         if not query:
-            logger.warning("Skipping query with empty query string", name=name)
+            logger.warning("Skipping query with empty query string", name=item.get("name"))
             continue
 
-        # Validate max_results
-        max_results_raw = item.get("max_results")
-        try:
-            max_results = int(max_results_raw) if max_results_raw is not None else 8
-            max_results = max(5, min(12, max_results))  # Clamp between 5 and 12
-        except (ValueError, TypeError):
-            logger.warning("Invalid max_results, using default", max_results_raw=max_results_raw)
-            max_results = 8
-
-        # Validate search_depth
-        search_depth_raw = item.get("search_depth", "basic")
-        if search_depth_raw not in ("basic", "advanced"):
-            logger.warning("Invalid search_depth, using 'basic'", search_depth=search_depth_raw)
-            search_depth = "basic"
-        else:
-            search_depth = search_depth_raw  # type: ignore[assignment]
-
         spec: TavilyQuerySpec = {
-            "name": name,
+            "name": item.get("name") or "news",
             "query": query,
-            "max_results": max_results,
-            "search_depth": search_depth,
+            "max_results": _parse_max_results(item.get("max_results")),
+            "search_depth": _parse_search_depth(item.get("search_depth")),
         }
 
-        # Optional fields
         timeframe = item.get("timeframe")
-        if timeframe and isinstance(timeframe, str):
+        if isinstance(timeframe, str) and timeframe:
             spec["timeframe"] = timeframe
 
         notes = item.get("notes")
-        if notes and isinstance(notes, str):
+        if isinstance(notes, str) and notes:
             spec["notes"] = notes
 
         queries.append(spec)
@@ -142,11 +129,23 @@ def parse_tavily_specs(raw_json: dict) -> List[TavilyQuerySpec]:
     return queries
 
 
+def _strip_markdown_code_blocks(content: str) -> str:
+    """Remove markdown code block delimiters from LLM response."""
+    content = content.strip()
+    if content.startswith("```json"):
+        content = content[7:]
+    elif content.startswith("```"):
+        content = content[3:]
+    if content.endswith("```"):
+        content = content[:-3]
+    return content.strip()
+
+
 def _generate_tavily_queries_sync(
     system_prompt: str,
     user_prompt: str,
     cache_key: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Generate Tavily query specifications using OpenAI (sync method)."""
     if openai is None:
         logger.warning("OpenAI not available")
@@ -157,45 +156,37 @@ def _generate_tavily_queries_sync(
         logger.warning("OPENAI_API_KEY not configured")
         raise RuntimeError("OpenAI API key not configured")
 
-    # Try cache first
     from app.core.cache import openai_cache
+    from app.core.resilience import openai_circuit
 
     cached_result = openai_cache.get(cache_key)
     if cached_result is not None:
         logger.debug("Cache hit for Tavily query generation")
         return cached_result
 
-    # Check circuit breaker
-    from app.core.resilience import openai_circuit
-
     if not openai_circuit.can_attempt():
         logger.warning("OpenAI circuit breaker is OPEN")
         raise RuntimeError("OpenAI circuit breaker is OPEN")
 
-    # Cache miss - call OpenAI
     raw_content = None
     try:
         logger.debug("Cache miss - calling OpenAI API for Tavily queries")
-        # Use OpenAI client from openai_client.py which handles both old and new API formats
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
         if openai_client.client and openai_client._use_new_api:
-            # New API format (v1.0+)
             completion = openai_client.client.chat.completions.create(
-                model="gpt-4o-mini",  # gpt-5-mini doesn't exist yet, using gpt-4o-mini
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+                model="gpt-4o-mini",
+                messages=messages,
                 temperature=0.2,
             )
             raw_content = completion.choices[0].message.content
         else:
-            # Old API format (v0.x) - fallback
             completion = openai.ChatCompletion.create(
-                model="gpt-4o-mini",  # gpt-5-mini doesn't exist yet, using gpt-4o-mini
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+                model="gpt-4o-mini",
+                messages=messages,
                 temperature=0.2,
             )
             raw_content = completion.choices[0].message["content"]
@@ -203,25 +194,9 @@ def _generate_tavily_queries_sync(
         if not raw_content:
             raise ValueError("OpenAI returned empty response")
 
-        # Clean up the response - remove markdown code blocks if present
-        content_cleaned = raw_content.strip()
-        if content_cleaned.startswith("```json"):
-            # Remove ```json and closing ```
-            content_cleaned = content_cleaned[7:]  # Remove "```json"
-            if content_cleaned.endswith("```"):
-                content_cleaned = content_cleaned[:-3]
-            content_cleaned = content_cleaned.strip()
-        elif content_cleaned.startswith("```"):
-            # Remove generic code blocks
-            content_cleaned = content_cleaned[3:]
-            if content_cleaned.endswith("```"):
-                content_cleaned = content_cleaned[:-3]
-            content_cleaned = content_cleaned.strip()
-
+        content_cleaned = _strip_markdown_code_blocks(raw_content)
         data = json.loads(content_cleaned)
         openai_circuit.record_success()
-
-        # Cache successful result
         openai_cache.set(cache_key, data)
         logger.debug("OpenAI API call successful and cached")
         return data
@@ -240,6 +215,19 @@ def _generate_tavily_queries_sync(
         raise
 
 
+def _build_cache_key(user_prompt: str, state: AgentState) -> str:
+    """Build a cache key for Tavily query generation based on state parameters."""
+    horizon = state.get("horizon") or "24h"
+    market_slug = state.get("slug") or "unknown"
+    event_slug = state.get("event", {}).get("slug") or ""
+    strategy_preset = state.get("strategy_preset") or "Balanced"
+
+    cache_input = (
+        f"{SYSTEM_PROMPT}:{user_prompt}:{horizon}:{market_slug}:{event_slug}:{strategy_preset}"
+    )
+    return f"openai:tavily_queries:{hashlib.md5(cache_input.encode()).hexdigest()}"
+
+
 async def run_tavily_prompt_agent(state: AgentState) -> AgentState:
     """Generate structured Tavily query specifications using an LLM.
 
@@ -251,32 +239,17 @@ async def run_tavily_prompt_agent(state: AgentState) -> AgentState:
       - slug
 
     Outputs (into AgentState):
-      - tavily_queries: List[TavilyQuerySpec] (only set on success)
+      - tavily_queries: list[TavilyQuerySpec] (only set on success)
     """
-    # If queries are already present (e.g. cache or manual override), skip.
     if state.get("tavily_queries"):
         logger.debug("tavily_queries already present, skipping generation")
         return state
 
-    # Extract context for logging and cache key
     market_slug = state.get("slug") or "unknown"
     horizon = state.get("horizon") or "24h"
-    strategy_preset = state.get("strategy_preset") or "Balanced"
-    event_slug = state.get("event", {}).get("slug") or ""
-
-    # Build LLM prompt
     user_prompt = build_prompt_from_state(state)
+    cache_key = _build_cache_key(user_prompt, state)
 
-    # Create cache key including horizon, slug, and strategy_preset
-    # This ensures different horizons/strategies don't share cached prompts
-    import hashlib
-
-    cache_input = (
-        f"{SYSTEM_PROMPT}:{user_prompt}:{horizon}:{market_slug}:{event_slug}:{strategy_preset}"
-    )
-    cache_key = f"openai:tavily_queries:{hashlib.md5(cache_input.encode()).hexdigest()}"
-
-    # Call OpenAI client (sync method wrapped in async executor)
     try:
         loop = asyncio.get_event_loop()
         raw_response = await loop.run_in_executor(
@@ -287,7 +260,6 @@ async def run_tavily_prompt_agent(state: AgentState) -> AgentState:
             cache_key,
         )
 
-        # Parse and validate
         tavily_queries = parse_tavily_specs(raw_response)
 
         if not tavily_queries:
@@ -296,55 +268,27 @@ async def run_tavily_prompt_agent(state: AgentState) -> AgentState:
                 market_slug=market_slug,
                 horizon=horizon,
             )
-            # Don't set tavily_queries - let news_agent handle fallback
             return state
 
-        # Log with context
-        first_query = tavily_queries[0]["query"][:180] if tavily_queries else None
         logger.info(
             "tavily_queries_generated",
             market_slug=market_slug,
             horizon=horizon,
             num_queries=len(tavily_queries),
-            first_query=first_query,
+            first_query=tavily_queries[0]["query"][:180],
             query_names=[q["name"] for q in tavily_queries],
         )
 
-        # Only set tavily_queries on success
         state["tavily_queries"] = tavily_queries
         return state
 
-    except RuntimeError as exc:
-        # OpenAI not available or circuit breaker open
-        logger.warning(
-            "tavily_prompt_agent_failed",
-            error=str(exc),
-            market_slug=market_slug,
-            horizon=horizon,
-            error_type="RuntimeError",
-        )
-        # Don't set tavily_queries - let news_agent handle fallback
-        return state
-    except (ValueError, KeyError) as exc:
-        # JSON parsing failed or invalid structure
-        logger.warning(
-            "tavily_prompt_agent_failed",
-            error=str(exc),
-            market_slug=market_slug,
-            horizon=horizon,
-            error_type=type(exc).__name__,
-        )
-        # Don't set tavily_queries - let news_agent handle fallback
-        return state
     except Exception as exc:
-        # Any other error
         logger.warning(
             "tavily_prompt_agent_failed",
             error=str(exc),
             market_slug=market_slug,
             horizon=horizon,
             error_type=type(exc).__name__,
-            exc_info=True,
+            exc_info=not isinstance(exc, (RuntimeError, ValueError, KeyError)),
         )
-        # Don't set tavily_queries - let news_agent handle fallback
         return state

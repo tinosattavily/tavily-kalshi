@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
@@ -44,7 +44,7 @@ async def get_async_client() -> AsyncIOMotorClient:
     return _client
 
 
-async def get_async_db():
+async def get_async_db() -> Any:
     """Return the main application database."""
     client = await get_async_client()
     return client["tavily_proj"]

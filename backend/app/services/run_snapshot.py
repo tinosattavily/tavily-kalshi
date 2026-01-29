@@ -6,6 +6,7 @@ from typing import Any, Dict
 from bson import ObjectId
 
 from app.agents.state import AgentState, TracePayload
+from app.core.logging_config import get_logger
 from app.db.async_repositories import (
     attach_trace_to_run_async,
     create_run_async,
@@ -16,6 +17,19 @@ from app.db.async_repositories import (
 )
 from app.db.models import EventDocument, MarketDocument, RunDocument, TraceDocument
 from app.db.utils import serialize_document
+
+logger = get_logger(__name__)
+
+
+def serialize_signal(signal_raw: Any) -> dict[str, Any]:
+    """Serialize a signal to dict, handling both Pydantic models and dicts."""
+    if hasattr(signal_raw, "model_dump"):
+        return signal_raw.model_dump()
+    if hasattr(signal_raw, "dict"):
+        return signal_raw.dict()
+    if isinstance(signal_raw, dict):
+        return signal_raw
+    return {}
 
 
 def build_event_document(state: AgentState, timestamp: str) -> EventDocument:
@@ -79,31 +93,14 @@ def build_run_document(
     event_id: ObjectId,
     market_id: ObjectId,
 ) -> RunDocument:
+    default_news_context = {"tavily_queries": [], "articles": [], "summary": ""}
     market_snapshot = state.get("market_snapshot") or {}
     event_context = state.get("event_context") or {}
-    news_context = state.get("news_context") or {
-        "tavily_queries": [],
-        "articles": [],
-        "summary": "",
-    }
-    signal_raw = state.get("signal") or {}
+    news_context = state.get("news_context") or default_news_context
+    signal = serialize_signal(state.get("signal") or {})
     decision = state.get("decision") or {}
     report = state.get("report") or {}
     env = state.get("env") or {}
-
-    # Serialize signal - handle both Pydantic model and dict
-    if hasattr(signal_raw, "model_dump"):
-        # Pydantic v2
-        signal = signal_raw.model_dump()
-    elif hasattr(signal_raw, "dict"):
-        # Pydantic v1
-        signal = signal_raw.dict()
-    elif isinstance(signal_raw, dict):
-        # Already a dict
-        signal = signal_raw
-    else:
-        # Fallback to empty dict
-        signal = {}
 
     run_doc: RunDocument = {
         "market_id": market_id,
@@ -222,6 +219,14 @@ async def init_run_document_async(
     return run_object_id
 
 
+PHASE_DATA_FIELDS: dict[str, list[str]] = {
+    "market": ["market_snapshot", "event_context", "market_options"],
+    "news": ["news_context"],
+    "signal": ["signal", "decision"],
+    "report": ["report"],
+}
+
+
 async def update_run_phase_async(
     run_id: str,
     phase: str,
@@ -229,10 +234,6 @@ async def update_run_phase_async(
     data: dict[str, Any] | None = None,
 ) -> None:
     """Update a specific phase status and optionally update phase data."""
-    from app.core.logging_config import get_logger
-
-    logger = get_logger(__name__)
-
     collection = await runs_collection_async()
     update_doc: dict[str, Any] = {
         f"status.{phase}": status,
@@ -240,52 +241,11 @@ async def update_run_phase_async(
     }
 
     if data:
-        # Update phase-specific data fields
-        if phase == "market":
-            if "market_snapshot" in data:
-                update_doc["market_snapshot"] = data["market_snapshot"]
-                logger.info(
-                    "Updating market_snapshot",
-                    run_id=run_id,
-                    has_snapshot=bool(data["market_snapshot"]),
-                )
-            if "event_context" in data:
-                update_doc["event_context"] = data["event_context"]
-                logger.info(
-                    "Updating event_context",
-                    run_id=run_id,
-                    has_context=bool(data["event_context"]),
-                )
-            if "market_options" in data:
-                update_doc["market_options"] = data["market_options"]
-                logger.info(
-                    "Updating market_options",
-                    run_id=run_id,
-                    options_count=(
-                        len(data["market_options"])
-                        if isinstance(data["market_options"], list)
-                        else 0
-                    ),
-                )
-        elif phase == "news":
-            if "news_context" in data:
-                update_doc["news_context"] = data["news_context"]
-                logger.info(
-                    "Updating news_context",
-                    run_id=run_id,
-                    has_context=bool(data["news_context"]),
-                )
-        elif phase == "signal":
-            if "signal" in data:
-                update_doc["signal"] = data["signal"]
-                logger.info("Updating signal", run_id=run_id, has_signal=bool(data["signal"]))
-            if "decision" in data:
-                update_doc["decision"] = data["decision"]
-                logger.info("Updating decision", run_id=run_id, has_decision=bool(data["decision"]))
-        elif phase == "report":
-            if "report" in data:
-                update_doc["report"] = data["report"]
-                logger.info("Updating report", run_id=run_id, has_report=bool(data["report"]))
+        allowed_fields = PHASE_DATA_FIELDS.get(phase, [])
+        for field in allowed_fields:
+            if field in data:
+                update_doc[field] = data[field]
+                logger.info(f"Updating {field}", run_id=run_id, has_data=bool(data[field]))
 
     result = await collection.update_one({"run_id": run_id}, {"$set": update_doc})
     logger.info(
@@ -314,16 +274,23 @@ async def update_run_with_event_and_market_async(
     market_id = market_doc["_id"]
 
     collection = await runs_collection_async()
+    
+    # Prepare update data
+    update_data = {
+        "event_id": event_id,
+        "market_id": market_id,
+        "slug": market_doc.get("slug", "unknown-market"),
+        "updated_at": _utc_now_iso(),
+    }
+    
+    # Include selected_market_slug if available (for multi-market events)
+    selected_market_slug = state.get("selected_market_slug")
+    if selected_market_slug:
+        update_data["selected_market_slug"] = selected_market_slug
+    
     await collection.update_one(
         {"run_id": run_id},
-        {
-            "$set": {
-                "event_id": event_id,
-                "market_id": market_id,
-                "slug": market_doc.get("slug", "unknown-market"),
-                "updated_at": _utc_now_iso(),
-            }
-        },
+        {"$set": update_data},
     )
 
     return event_id, market_id

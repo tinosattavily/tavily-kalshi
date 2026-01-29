@@ -3,20 +3,61 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from app.agents.state import AgentState
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+DEFAULT_DESCRIPTION = "Placeholder description for the macro event associated with this market."
+
 
 def _derive_event_slug(market_slug: str | None) -> str:
+    """Derive an event slug from a market slug by removing the last segment."""
     if not market_slug:
         return "unknown-event"
     parts = market_slug.split("-")
     if len(parts) <= 1:
         return market_slug
     return "-".join(parts[:-1]) or market_slug
+
+
+def _get_default_end_date() -> str:
+    """Generate a default end date 30 days from now in ISO format."""
+    end = datetime.now(timezone.utc) + timedelta(days=30)
+    return end.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _build_event_document(
+    event: dict[str, Any],
+    event_slug: str,
+    title: str,
+    description: str,
+    category: str,
+    image: str | None,
+    end_date: str,
+    timestamp: str,
+) -> dict[str, Any]:
+    """Build the normalized event document, preserving API-sourced metrics."""
+    doc: dict[str, Any] = {
+        "gamma_event_id": event.get("gamma_event_id") or f"evt-{event_slug}",
+        "slug": event_slug,
+        "title": title,
+        "description": description,
+        "category": category,
+        "image": image,
+        "end_date": end_date,
+        "created_at": event.get("created_at", timestamp),
+        "updated_at": timestamp,
+    }
+
+    # Preserve API-sourced metrics (set by market_agent) if present
+    for key in ("commentCount", "seriesCommentCount", "volume24hr"):
+        if event.get(key) is not None:
+            doc[key] = event[key]
+
+    return doc
 
 
 async def run_event_agent(state: AgentState) -> AgentState:
@@ -27,78 +68,47 @@ async def run_event_agent(state: AgentState) -> AgentState:
     """
     market_slug = state.get("slug")
     logger.debug("Running event agent", market_slug=market_slug)
-    event = state.get("event", {})
+
+    event = state.get("event") or {}
     event_slug = event.get("slug") or _derive_event_slug(market_slug)
-    gamma_event_id = event.get("gamma_event_id") or f"evt-{event_slug}"
     title = event.get("title") or f"{event_slug.replace('-', ' ').title()}?"
-    description = event.get(
-        "description",
-        "Placeholder description for the macro event associated with this market.",
-    )
+    description = event.get("description", DEFAULT_DESCRIPTION)
     category = event.get("category") or "Macro"
-    # Use image from event if available (set by market_agent from Polymarket API),
-    # otherwise use fallback
-    image = event.get("image") or None  # Don't use fallback, let frontend handle missing images
-    end_date = event.get("end_date") or (datetime.now(timezone.utc) + timedelta(days=30)).replace(
-        microsecond=0
-    ).isoformat().replace("+00:00", "Z")
+    image = event.get("image")
+    end_date = event.get("end_date") or _get_default_end_date()
     timestamp = state.get("run_at") or datetime.now(timezone.utc).isoformat()
 
-    # Preserve commentCount, seriesCommentCount, and volume24hr from the original
-    # event data (set by market_agent)
-    original_comment_count = event.get("commentCount")
-    original_series_comment_count = event.get("seriesCommentCount")
-    original_volume24hr = event.get("volume24hr")
-
-    state["event"] = {
-        "gamma_event_id": gamma_event_id,
-        "slug": event_slug,
-        "title": title,
-        "description": description,
-        "category": category,
-        "image": image,
-        "end_date": end_date,
-        "created_at": event.get("created_at", timestamp),
-        "updated_at": timestamp,
-    }
-    # IMPORTANT: Preserve commentCount and volume24hr from API (set by market_agent)
-    if original_comment_count is not None:
-        state["event"]["commentCount"] = original_comment_count
-    if original_series_comment_count is not None:
-        state["event"]["seriesCommentCount"] = original_series_comment_count
-    if original_volume24hr is not None:
-        state["event"]["volume24hr"] = original_volume24hr
-
+    # Build and store normalized event document
+    state["event"] = _build_event_document(
+        event=event,
+        event_slug=event_slug,
+        title=title,
+        description=description,
+        category=category,
+        image=image,
+        end_date=end_date,
+        timestamp=timestamp,
+    )
     state["event_description"] = description
 
-    # Get additional event data from state (set by market_agent)
-    event_data = state.get("event", {})
-    volume24hr = event_data.get("volume24hr")
-    # Get commentCount, allowing 0 values (explicitly check for None)
-    commentCount = event_data.get("commentCount") if "commentCount" in event_data else None
-    seriesCommentCount = (
-        event_data.get("seriesCommentCount") if "seriesCommentCount" in event_data else None
-    )
-
-    # Log to verify commentCount is preserved
-    logger.debug(
-        "Event agent - commentCount handling",
-        original_comment_count=original_comment_count,
-        commentCount_in_event_context=commentCount,
-        commentCount_in_state_event=state["event"].get("commentCount"),
-        seriesCommentCount_in_event_context=seriesCommentCount,
-        seriesCommentCount_in_state_event=state["event"].get("seriesCommentCount"),
-    )
+    # Build event context for downstream agents
     url = state.get("polymarket_url") or state.get("market_url")
-
     state["event_context"] = {
         "title": title,
         "description": description,
         "category": category,
         "image": image,
-        "volume24hr": volume24hr,
-        "commentCount": commentCount,  # Can be None, 0, or a number
-        "seriesCommentCount": seriesCommentCount,
+        "volume24hr": state["event"].get("volume24hr"),
+        "commentCount": state["event"].get("commentCount"),
+        "seriesCommentCount": state["event"].get("seriesCommentCount"),
         "url": url,
     }
+
+    logger.debug(
+        "Event agent completed",
+        event_slug=event_slug,
+        has_comment_count=state["event"].get("commentCount") is not None,
+        has_volume24hr=state["event"].get("volume24hr") is not None,
+    )
+
     return state

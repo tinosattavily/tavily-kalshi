@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from app.config import settings
 from app.core.cache import openai_cache
@@ -26,23 +26,59 @@ class OpenAIClient:
     Provides async methods with built-in caching and circuit breaker protection.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize OpenAI client."""
         self.api_key = settings.openai_api_key
         self.client = None
         self._use_new_api = False
-        if openai is not None and self.api_key:
-            # Support both old (v0.x) and new (v1.0+) OpenAI API formats
-            try:
-                # Try new API format (v1.0+)
-                from openai import OpenAI
 
+        if openai is not None and self.api_key:
+            try:
+                from openai import OpenAI
                 self.client = OpenAI(api_key=self.api_key)
                 self._use_new_api = True
             except (ImportError, AttributeError):
-                # Fall back to old API format (v0.x)
                 openai.api_key = self.api_key
                 self._use_new_api = False
+
+    def _ensure_available(self) -> None:
+        """Raise if OpenAI is not configured."""
+        if openai is None or not self.api_key:
+            logger.warning("OPENAI_API_KEY missing or openai not installed")
+            raise RuntimeError("OpenAI is not available")
+
+    def _check_circuit_breaker(self, operation: str) -> None:
+        """Check circuit breaker state and raise if open."""
+        if not openai_circuit.can_attempt():
+            logger.warning(f"OpenAI circuit breaker is OPEN for {operation}")
+            raise RuntimeError("OpenAI circuit breaker is OPEN")
+
+    def _call_chat_completion(
+        self,
+        system_msg: str,
+        user_msg: str,
+        temperature: float = 0.2,
+    ) -> str:
+        """Make a chat completion request and return the content."""
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ]
+
+        if self.client and self._use_new_api:
+            completion = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                temperature=temperature,
+            )
+            return completion.choices[0].message.content
+        else:
+            completion = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                temperature=temperature,
+            )
+            return completion.choices[0].message["content"]
 
     def _generate_signal_sync(
         self,
@@ -52,7 +88,7 @@ class OpenAIClient:
         news_summary: str,
         top_headlines: str,
         tag_label: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a trading signal using OpenAI.
 
         Args:
@@ -72,9 +108,7 @@ class OpenAIClient:
             - confidence: "low", "medium", or "high"
             - rationale: Explanation string
         """
-        if openai is None or not self.api_key:
-            logger.warning("OPENAI_API_KEY missing or openai not installed")
-            raise RuntimeError("OpenAI is not available")
+        self._ensure_available()
 
         system_msg = (
             "You are a careful prediction market analyst. "
@@ -105,62 +139,33 @@ Return a JSON object with the following keys:
 - "model_prob_abs": float between 0 and 1 (your best estimate of the TRUE probability of YES)
 - "direction": string, one of "up", "down", or "flat" relative to the market's implied probability
 - "expected_delta_range": list of two floats [lo, hi] in probability points
-  (0–1 space) capturing how much you expect the price could move
+  (0-1 space) capturing how much you expect the price could move
   if the market corrected
 - "confidence": string, one of "low", "medium", "high"
   * Use "high" only when you have strong, recent, and diverse evidence supporting your estimate
   * Use "medium" when you have moderate evidence or some uncertainty
   * Use "low" when evidence is sparse, conflicting, or the situation is highly uncertain
-- "rationale": a short 1–3 sentence explanation referencing the news
+- "rationale": a short 1-3 sentence explanation referencing the news
 """
 
-        # Create cache key from input parameters
         cache_input = (
             f"{event_title}:{market_question}:{yes_price:.4f}:"
             f"{news_summary[:200]}:{top_headlines[:200]}"
         )
         cache_key = f"openai:{hashlib.md5(cache_input.encode()).hexdigest()}"
 
-        # Try cache first
         cached_result = openai_cache.get(cache_key)
         if cached_result is not None:
             logger.debug("Cache hit for OpenAI", event_title=event_title)
             return cached_result
 
-        # Check circuit breaker
-        if not openai_circuit.can_attempt():
-            logger.warning("OpenAI circuit breaker is OPEN")
-            raise RuntimeError("OpenAI circuit breaker is OPEN")
+        self._check_circuit_breaker("signal generation")
 
-        # Cache miss - call OpenAI
         try:
             logger.debug("Cache miss - calling OpenAI API", event_title=event_title)
-            if self.client and self._use_new_api:
-                # New API format (v1.0+)
-                completion = self.client.chat.completions.create(
-                    model="gpt-4o-mini",  # gpt-5-mini doesn't exist yet, using gpt-4o-mini
-                    messages=[
-                        {"role": "system", "content": system_msg},
-                        {"role": "user", "content": user_msg},
-                    ],
-                    temperature=0.2,
-                )
-                raw_content = completion.choices[0].message.content
-            else:
-                # Old API format (v0.x)
-                completion = openai.ChatCompletion.create(
-                    model="gpt-4o-mini",  # gpt-5-mini doesn't exist yet, using gpt-4o-mini
-                    messages=[
-                        {"role": "system", "content": system_msg},
-                        {"role": "user", "content": user_msg},
-                    ],
-                    temperature=0.2,
-                )
-                raw_content = completion.choices[0].message["content"]
+            raw_content = self._call_chat_completion(system_msg, user_msg)
             data = json.loads(raw_content)
             openai_circuit.record_success()
-
-            # Cache successful result
             openai_cache.set(cache_key, data)
             logger.debug("OpenAI API call successful and cached")
             return data
@@ -177,7 +182,7 @@ Return a JSON object with the following keys:
         news_summary: str,
         top_headlines: str,
         tag_label: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a trading signal using OpenAI (async wrapper).
 
         Args:
@@ -197,7 +202,6 @@ Return a JSON object with the following keys:
             - confidence: "low", "medium", or "high"
             - rationale: Explanation string
         """
-        # Run sync OpenAI call in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             None,
@@ -212,7 +216,7 @@ Return a JSON object with the following keys:
 
     def _summarize_news_with_sentiment_sync(
         self,
-        articles: List[Dict[str, Any]],
+        articles: list[dict[str, Any]],
         event_title: str,
         market_question: str,
     ) -> str:
@@ -226,98 +230,25 @@ Return a JSON object with the following keys:
         Returns:
             A comprehensive summary string
         """
-        if openai is None or not self.api_key:
-            logger.warning("OPENAI_API_KEY missing or openai not installed")
-            raise RuntimeError("OpenAI is not available")
+        self._ensure_available()
 
-        # Group articles by sentiment
-        bullish_articles = [a for a in articles if a.get("sentiment") == "bullish"]
-        bearish_articles = [a for a in articles if a.get("sentiment") == "bearish"]
-        neutral_articles = [a for a in articles if a.get("sentiment") == "neutral"]
+        sentiment_groups = {
+            "bullish": [a for a in articles if a.get("sentiment") == "bullish"],
+            "bearish": [a for a in articles if a.get("sentiment") == "bearish"],
+            "neutral": [a for a in articles if a.get("sentiment") == "neutral"],
+        }
 
-        # Count articles by sentiment
-        bullish_count = len(bullish_articles)
-        bearish_count = len(bearish_articles)
-        neutral_count = len(neutral_articles)
+        counts = {sentiment: len(group) for sentiment, group in sentiment_groups.items()}
         total_count = len(articles)
 
-        # Determine majority sentiment
-        if bullish_count > bearish_count and bullish_count > neutral_count:
-            majority_sentiment = "bullish"
-            majority_count = bullish_count
-        elif bearish_count > neutral_count:
-            majority_sentiment = "bearish"
-            majority_count = bearish_count
-        else:
-            majority_sentiment = "neutral"
-            majority_count = neutral_count
+        majority_sentiment = max(counts, key=counts.get)
+        majority_count = counts[majority_sentiment]
 
-        # Sample articles: at least one from each sentiment, then weight towards majority
-        sampled_articles: List[Dict[str, Any]] = []
+        sampled_articles = self._sample_articles_by_sentiment(
+            sentiment_groups, majority_sentiment, total_count
+        )
 
-        # Always include at least one from each sentiment if available
-        if bullish_articles:
-            sampled_articles.append(bullish_articles[0])
-        if bearish_articles:
-            sampled_articles.append(bearish_articles[0])
-        if neutral_articles:
-            sampled_articles.append(neutral_articles[0])
-
-        # Add more articles from majority sentiment (weighted sampling)
-        # Calculate how many more to add based on proportion
-        if total_count > 3:
-            # Add proportionally more from majority sentiment
-            # Take up to 50% of remaining articles from majority, rest distributed
-            max_articles = min(12, total_count)
-            remaining_slots = max_articles - len(sampled_articles)
-            if remaining_slots > 0:
-                majority_proportion = majority_count / total_count if total_count > 0 else 0.33
-                # Calculate slots for majority sentiment (1.5x weight)
-                majority_slots = max(1, int(remaining_slots * majority_proportion * 1.5))
-                # Don't exceed remaining slots
-                majority_slots = min(majority_slots, remaining_slots)
-
-                if majority_sentiment == "bullish" and bullish_articles:
-                    # Add more bullish articles (skip first one already added)
-                    available_bullish = bullish_articles[1:]
-                    for article in available_bullish[:majority_slots]:
-                        if article not in sampled_articles and len(sampled_articles) < max_articles:
-                            sampled_articles.append(article)
-                elif majority_sentiment == "bearish" and bearish_articles:
-                    # Add more bearish articles
-                    available_bearish = bearish_articles[1:]
-                    for article in available_bearish[:majority_slots]:
-                        if article not in sampled_articles and len(sampled_articles) < max_articles:
-                            sampled_articles.append(article)
-                elif majority_sentiment == "neutral" and neutral_articles:
-                    # Add more neutral articles
-                    available_neutral = neutral_articles[1:]
-                    for article in available_neutral[:majority_slots]:
-                        if article not in sampled_articles and len(sampled_articles) < max_articles:
-                            sampled_articles.append(article)
-
-                # Fill remaining slots with other articles (distributed across all sentiments)
-                remaining = max_articles - len(sampled_articles)
-                if remaining > 0:
-                    all_remaining = [a for a in articles if a not in sampled_articles]
-                    sampled_articles.extend(all_remaining[:remaining])
-
-        # Limit to reasonable number for prompt
-        sampled_articles = sampled_articles[:12]
-
-        # Build article context for prompt
-        article_contexts = []
-        for idx, article in enumerate(sampled_articles, 1):
-            title = article.get("title", "Untitled")
-            snippet = article.get("snippet") or article.get("summary", "")
-            source = article.get("source", "Unknown source")
-            sentiment = article.get("sentiment", "neutral")
-            article_contexts.append(
-                f"Article {idx} ({sentiment.upper()}):\n"
-                f"Title: {title}\n"
-                f"Source: {source}\n"
-                f"Content: {snippet[:300] if snippet else 'No content available'}\n"
-            )
+        article_contexts = self._build_article_contexts(sampled_articles)
 
         system_msg = (
             "You are a financial news analyst. Your task is to synthesize a comprehensive "
@@ -328,19 +259,17 @@ Return a JSON object with the following keys:
             "and their implications."
         )
 
-        # Calculate percentages safely
-        bullish_pct = (bullish_count / total_count * 100) if total_count > 0 else 0.0
-        bearish_pct = (bearish_count / total_count * 100) if total_count > 0 else 0.0
-        neutral_pct = (neutral_count / total_count * 100) if total_count > 0 else 0.0
+        def pct(count: int) -> float:
+            return (count / total_count * 100) if total_count > 0 else 0.0
 
         user_msg = f"""
 Event: {event_title}
 Market Question: {market_question}
 
 Sentiment Distribution:
-- Bullish articles: {bullish_count} ({bullish_pct:.1f}%)
-- Bearish articles: {bearish_count} ({bearish_pct:.1f}%)
-- Neutral articles: {neutral_count} ({neutral_pct:.1f}%)
+- Bullish articles: {counts['bullish']} ({pct(counts['bullish']):.1f}%)
+- Bearish articles: {counts['bearish']} ({pct(counts['bearish']):.1f}%)
+- Neutral articles: {counts['neutral']} ({pct(counts['neutral']):.1f}%)
 - Majority sentiment: {majority_sentiment.upper()} ({majority_count} articles)
 
 Articles to summarize:
@@ -356,56 +285,27 @@ Please provide a comprehensive summary that:
 Summary:
 """
 
-        # Create cache key from input parameters
         cache_input = (
             f"{event_title}:{market_question}:"
-            f"{bullish_count}:{bearish_count}:{neutral_count}:"
+            f"{counts['bullish']}:{counts['bearish']}:{counts['neutral']}:"
             f"{':'.join(a.get('title', '')[:50] for a in sampled_articles[:5])}"
         )
         cache_key = f"openai:summary:{hashlib.md5(cache_input.encode()).hexdigest()}"
 
-        # Try cache first
         cached_result = openai_cache.get(cache_key)
         if cached_result is not None:
             logger.debug("Cache hit for OpenAI news summary", event_title=event_title)
             return cached_result
 
-        # Check circuit breaker
-        if not openai_circuit.can_attempt():
-            logger.warning("OpenAI circuit breaker is OPEN for summary generation")
-            raise RuntimeError("OpenAI circuit breaker is OPEN")
+        self._check_circuit_breaker("summary generation")
 
-        # Cache miss - call OpenAI
         try:
             logger.debug(
                 "Cache miss - calling OpenAI API for news summary",
                 event_title=event_title,
             )
-            if self.client and self._use_new_api:
-                # New API format (v1.0+)
-                completion = self.client.chat.completions.create(
-                    model="gpt-4o-mini",  # gpt-5-mini doesn't exist yet, using gpt-4o-mini
-                    messages=[
-                        {"role": "system", "content": system_msg},
-                        {"role": "user", "content": user_msg},
-                    ],
-                    temperature=0.3,  # Lower temperature for more consistent summaries
-                )
-                summary = completion.choices[0].message.content.strip()
-            else:
-                # Old API format (v0.x)
-                completion = openai.ChatCompletion.create(
-                    model="gpt-4o-mini",  # gpt-5-mini doesn't exist yet, using gpt-4o-mini
-                    messages=[
-                        {"role": "system", "content": system_msg},
-                        {"role": "user", "content": user_msg},
-                    ],
-                    temperature=0.3,  # Lower temperature for more consistent summaries
-                )
-                summary = completion.choices[0].message["content"].strip()
+            summary = self._call_chat_completion(system_msg, user_msg, temperature=0.3).strip()
             openai_circuit.record_success()
-
-            # Cache successful result
             openai_cache.set(cache_key, summary)
             logger.debug("OpenAI news summary generated and cached")
             return summary
@@ -414,15 +314,74 @@ Summary:
             logger.warning("OpenAI summary call failed", error=str(exc), exc_info=True)
             raise
 
+    def _sample_articles_by_sentiment(
+        self,
+        sentiment_groups: dict[str, list[dict[str, Any]]],
+        majority_sentiment: str,
+        total_count: int,
+    ) -> list[dict[str, Any]]:
+        """Sample articles with weighting towards majority sentiment."""
+        sampled: list[dict[str, Any]] = []
+
+        for group in sentiment_groups.values():
+            if group:
+                sampled.append(group[0])
+
+        if total_count <= 3:
+            return sampled[:12]
+
+        max_articles = min(12, total_count)
+        remaining_slots = max_articles - len(sampled)
+
+        if remaining_slots > 0:
+            majority_proportion = (
+                len(sentiment_groups[majority_sentiment]) / total_count
+                if total_count > 0
+                else 0.33
+            )
+            majority_slots = min(max(1, int(remaining_slots * majority_proportion * 1.5)),
+                                 remaining_slots)
+
+            majority_articles = sentiment_groups[majority_sentiment][1:]
+            for article in majority_articles[:majority_slots]:
+                if article not in sampled and len(sampled) < max_articles:
+                    sampled.append(article)
+
+            all_articles = [
+                a
+                for group in sentiment_groups.values()
+                for a in group
+                if a not in sampled
+            ]
+            remaining = max_articles - len(sampled)
+            sampled.extend(all_articles[:remaining])
+
+        return sampled[:12]
+
+    def _build_article_contexts(self, articles: list[dict[str, Any]]) -> list[str]:
+        """Build formatted article context strings for the prompt."""
+        contexts = []
+        for idx, article in enumerate(articles, 1):
+            title = article.get("title", "Untitled")
+            snippet = article.get("snippet") or article.get("summary", "")
+            source = article.get("source", "Unknown source")
+            sentiment = article.get("sentiment", "neutral")
+            content = snippet[:300] if snippet else "No content available"
+            contexts.append(
+                f"Article {idx} ({sentiment.upper()}):\n"
+                f"Title: {title}\n"
+                f"Source: {source}\n"
+                f"Content: {content}\n"
+            )
+        return contexts
+
     async def summarize_news_with_sentiment(
         self,
-        articles: List[Dict[str, Any]],
+        articles: list[dict[str, Any]],
         event_title: str,
         market_question: str,
     ) -> str:
         """Generate a comprehensive news summary using OpenAI, weighted by sentiment.
-
-        Async wrapper.
 
         Args:
             articles: List of article dicts with sentiment labels (bullish, bearish, neutral)
@@ -432,7 +391,6 @@ Summary:
         Returns:
             A comprehensive summary string
         """
-        # Run sync OpenAI call in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             None,
@@ -443,7 +401,6 @@ Summary:
         )
 
 
-# Module-level singleton instance
 _openai_client: Optional[OpenAIClient] = None
 
 

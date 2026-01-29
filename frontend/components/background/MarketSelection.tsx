@@ -1,32 +1,94 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-type MarketOption = {
+interface MarketOption {
   slug: string;
   question?: string;
   image?: string;
   best_bid?: number;
   best_ask?: number;
   liquidity?: number;
-  // Optional volume fields if provided by backend
   volume?: number;
   volume24hr?: number;
   end_date?: string;
   outcomes?: string[];
   outcome_prices?: number[];
-};
+}
 
-type EventContext = {
+interface EventContext {
   title?: string;
   image?: string;
-};
+}
 
-type Props = {
+interface MarketSelectionProps {
   options: MarketOption[];
   eventContext?: EventContext | null;
   isSubmitting: boolean;
   onSelect: (slug: string) => void;
   onSortedOptionsChange?: (options: MarketOption[]) => void;
-};
+}
+
+type SortOption = "active" | "soonest" | "total";
+
+const SORT_OPTIONS: Array<{ key: SortOption; label: string }> = [
+  { key: "active", label: "Active (24h volume)" },
+  { key: "soonest", label: "Soonest to close" },
+  { key: "total", label: "Highest total volume" },
+];
+
+function getNumericValue(value: number | undefined): number {
+  const n = Number(value ?? NaN);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+function getEndTimestamp(market: MarketOption): number {
+  const t = market.end_date ? Date.parse(market.end_date) : Number.POSITIVE_INFINITY;
+  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+}
+
+function getActiveScore(market: MarketOption): number {
+  const v24 = getNumericValue(market.volume24hr);
+  if (v24) return v24;
+  const vTotal = getNumericValue(market.volume);
+  if (vTotal) return vTotal;
+  return getNumericValue(market.liquidity);
+}
+
+function getTotalScore(market: MarketOption): number {
+  const vTotal = getNumericValue(market.volume);
+  if (vTotal) return vTotal;
+  const v24 = getNumericValue(market.volume24hr);
+  if (v24) return v24;
+  return getNumericValue(market.liquidity);
+}
+
+function sortMarkets(markets: MarketOption[], sortBy: SortOption): MarketOption[] {
+  const arr = [...markets];
+
+  if (sortBy === "active") {
+    arr.sort((a, b) => {
+      const scoreDiff = getActiveScore(b) - getActiveScore(a);
+      if (scoreDiff !== 0) return scoreDiff;
+      return getEndTimestamp(a) - getEndTimestamp(b);
+    });
+    return arr;
+  }
+
+  if (sortBy === "total") {
+    arr.sort((a, b) => {
+      const scoreDiff = getTotalScore(b) - getTotalScore(a);
+      if (scoreDiff !== 0) return scoreDiff;
+      return getEndTimestamp(a) - getEndTimestamp(b);
+    });
+    return arr;
+  }
+
+  arr.sort((a, b) => {
+    const endDiff = getEndTimestamp(a) - getEndTimestamp(b);
+    if (endDiff !== 0) return endDiff;
+    return getNumericValue(b.volume24hr) - getNumericValue(a.volume24hr);
+  });
+  return arr;
+}
 
 export default function MarketSelection({
   options,
@@ -34,97 +96,26 @@ export default function MarketSelection({
   isSubmitting,
   onSelect,
   onSortedOptionsChange,
-}: Props) {
-  const [sortBy, setSortBy] = React.useState<"active" | "soonest" | "total">("active");
-  const [isSortOpen, setIsSortOpen] = React.useState(false);
-  const [hoveredIndex, setHoveredIndex] = React.useState<number | null>(null);
-  const [sliderStyle, setSliderStyle] = React.useState<React.CSSProperties>({ opacity: 0 });
-  const buttonRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
-  const gridRef = React.useRef<HTMLDivElement | null>(null);
+}: MarketSelectionProps): React.JSX.Element {
+  const [sortBy, setSortBy] = useState<SortOption>("active");
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [sliderStyle, setSliderStyle] = useState<React.CSSProperties>({ opacity: 0 });
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+
   const count = options.length;
+  const sortedOptions = useMemo(() => sortMarkets(options, sortBy), [options, sortBy]);
 
-  // No filtering; operate directly on options
-  const filteredOptions = options;
-
-  // Sort options based on selection:
-  // - "active": 24h volume desc (fallback total, then liquidity), tie-break soonest end_date
-  // - "total": total volume desc (fallback 24h, then liquidity), tie-break soonest end_date
-  // - "soonest": soonest end_date first, tie-break by 24h volume desc
-  const sortedOptions = React.useMemo(() => {
-    const v24 = (m: MarketOption): number => {
-      const n = Number(m.volume24hr ?? NaN);
-      return Number.isNaN(n) ? 0 : n;
-    };
-    const vTotal = (m: MarketOption): number => {
-      const n = Number(m.volume ?? NaN);
-      return Number.isNaN(n) ? 0 : n;
-    };
-    const liq = (m: MarketOption): number => {
-      const n = Number(m.liquidity ?? NaN);
-      return Number.isNaN(n) ? 0 : n;
-    };
-    const scoreActive = (m: MarketOption): number => {
-      const s24 = v24(m);
-      if (s24) return s24;
-      const vt = vTotal(m);
-      if (vt) return vt;
-      return liq(m);
-    };
-    const scoreTotal = (m: MarketOption): number => {
-      const vt = vTotal(m);
-      if (vt) return vt;
-      const s24 = v24(m);
-      if (s24) return s24;
-      return liq(m);
-    };
-    const endTs = (m: MarketOption) => {
-      const t = m.end_date ? Date.parse(m.end_date) : Number.POSITIVE_INFINITY;
-      return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
-    };
-    const arr = [...filteredOptions];
-    if (sortBy === "active") {
-      arr.sort((a, b) => {
-        const vb = scoreActive(b);
-        const va = scoreActive(a);
-        if (vb !== va) return vb - va;
-        return endTs(a) - endTs(b);
-      });
-      return arr;
-    }
-    if (sortBy === "total") {
-      arr.sort((a, b) => {
-        const vb = scoreTotal(b);
-        const va = scoreTotal(a);
-        if (vb !== va) return vb - va;
-        return endTs(a) - endTs(b);
-      });
-      return arr;
-    }
-    // sortBy === "soonest"
-    arr.sort((a, b) => endTs(a) - endTs(b));
-    // For identical end times, break ties by 24h volume
-    arr.sort((a, b) => {
-      const ea = endTs(a);
-      const eb = endTs(b);
-      if (ea !== eb) return 0;
-      return v24(b) - v24(a);
-    });
-    return arr;
-  }, [filteredOptions, sortBy]);
-
-  React.useEffect(() => {
-    if (onSortedOptionsChange) {
-      onSortedOptionsChange(sortedOptions);
-    }
+  useEffect(() => {
+    onSortedOptionsChange?.(sortedOptions);
   }, [sortedOptions, onSortedOptionsChange]);
 
-  // Reset refs when sortedOptions changes
-  React.useEffect(() => {
+  useEffect(() => {
     buttonRefs.current = [];
   }, [sortedOptions]);
 
-  // Update slider position when hovered index changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (hoveredIndex === null || !buttonRefs.current[hoveredIndex] || !gridRef.current) {
       setSliderStyle({ opacity: 0 });
       return;
@@ -146,7 +137,8 @@ export default function MarketSelection({
     });
   }, [hoveredIndex, sortedOptions]);
 
-  const MarketButton = (m: MarketOption, index: number) => (
+  function renderMarketButton(m: MarketOption, index: number): React.JSX.Element {
+    return (
     <button
       id={`market-option-${m.slug}`}
       key={m.slug}
@@ -185,11 +177,14 @@ export default function MarketSelection({
           </div>
           </div>
         </div>
-    </button>
-  );
+      </button>
+    );
+  }
 
-  const SingleRow = (n: number) => {
-    const colClass = n === 1 ? "grid-cols-1" : n === 2 ? "grid-cols-2" : "grid-cols-3";
+  function renderSingleRowGrid(n: number): React.JSX.Element {
+    let colClass = "grid-cols-3";
+    if (n === 1) colClass = "grid-cols-1";
+    else if (n === 2) colClass = "grid-cols-2";
     return (
       <div 
         id="market-options-grid" 
@@ -201,10 +196,24 @@ export default function MarketSelection({
           className="absolute rounded-xl bg-neutral-200/80 border border-white shadow-xl pointer-events-none transition-all duration-300 ease-in-out z-0"
           style={sliderStyle}
         />
-        {sortedOptions.map((m, idx) => MarketButton(m, idx))}
+        {sortedOptions.map((m, idx) => renderMarketButton(m, idx))}
       </div>
     );
-  };
+  }
+
+  function renderHoverSlider(): React.JSX.Element {
+    return (
+      <div
+        className="absolute rounded-xl bg-neutral-200/80 border border-white shadow-xl pointer-events-none transition-all duration-300 ease-in-out z-0"
+        style={sliderStyle}
+      />
+    );
+  }
+
+  function getSortLabel(): string {
+    const option = SORT_OPTIONS.find((o) => o.key === sortBy);
+    return option?.label ?? "";
+  }
 
   return (
     <div id="market-selection" className="mb-6">
@@ -249,9 +258,7 @@ export default function MarketSelection({
             aria-haspopup="listbox"
             aria-expanded={isSortOpen}
           >
-            {sortBy === "active" && <span>Active (24h volume)</span>}
-            {sortBy === "soonest" && <span>Soonest to close</span>}
-            {sortBy === "total" && <span>Highest total volume</span>}
+            <span>{getSortLabel()}</span>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" className="text-neutral-500">
               <path fill="currentColor" d="m7 10l5 5l5-5z" />
             </svg>
@@ -262,11 +269,7 @@ export default function MarketSelection({
               className="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-neutral-200 bg-white p-1 shadow-lg"
             >
               <ul id="market-sort-options" role="listbox" className="max-h-60 overflow-auto">
-                {[
-                  { key: "active", label: "Active (24h volume)" },
-                  { key: "soonest", label: "Soonest to close" },
-                  { key: "total", label: "Highest total volume" },
-                ].map((opt) => (
+                {SORT_OPTIONS.map((opt) => (
                   <li key={opt.key}>
                     <button
                       id={`market-sort-option-${opt.key}`}
@@ -294,57 +297,46 @@ export default function MarketSelection({
         </div>
         </div>
 
-        {count <= 3 && SingleRow(count)}
+        {count <= 3 && renderSingleRowGrid(count)}
         {count === 4 && (
-          <div 
+          <div
             id="market-options-grid"
             ref={gridRef}
             className="grid grid-cols-2 gap-3 relative"
             onMouseLeave={() => setHoveredIndex(null)}
           >
-            <div
-              className="absolute rounded-xl bg-neutral-200/80 border border-white shadow-xl pointer-events-none transition-all duration-300 ease-in-out z-0"
-              style={sliderStyle}
-            />
-            {sortedOptions.map((m, idx) => MarketButton(m, idx))}
+            {renderHoverSlider()}
+            {sortedOptions.map((m, idx) => renderMarketButton(m, idx))}
           </div>
         )}
         {count === 5 && (
-          <div 
+          <div
             id="market-options-grid"
             ref={gridRef}
             className="space-y-3 relative"
             onMouseLeave={() => setHoveredIndex(null)}
           >
-            <div
-              className="absolute rounded-xl bg-neutral-200/80 border border-white shadow-xl pointer-events-none transition-all duration-300 ease-in-out z-0"
-              style={sliderStyle}
-            />
+            {renderHoverSlider()}
             <div className="grid grid-cols-3 gap-3">
-              {sortedOptions.slice(0, 3).map((m, idx) => MarketButton(m, idx))}
+              {sortedOptions.slice(0, 3).map((m, idx) => renderMarketButton(m, idx))}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              {sortedOptions.slice(3).map((m, idx) => MarketButton(m, idx + 3))}
+              {sortedOptions.slice(3).map((m, idx) => renderMarketButton(m, idx + 3))}
             </div>
           </div>
         )}
         {count >= 6 && (
-          <div 
+          <div
             id="market-options-grid"
             ref={gridRef}
             className="grid grid-cols-3 gap-3 relative"
             onMouseLeave={() => setHoveredIndex(null)}
           >
-            <div
-              className="absolute rounded-xl bg-neutral-200/80 border border-white shadow-xl pointer-events-none transition-all duration-300 ease-in-out z-0"
-              style={sliderStyle}
-            />
-            {sortedOptions.map((m, idx) => MarketButton(m, idx))}
+            {renderHoverSlider()}
+            {sortedOptions.map((m, idx) => renderMarketButton(m, idx))}
           </div>
         )}
       </div>
     </div>
   );
 }
-
-

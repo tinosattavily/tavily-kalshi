@@ -1,61 +1,63 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+
 import {
   Activity,
-  Waves,
-  Timer,
-  MessageCircle,
   ArrowUpRight,
+  CheckCircle2,
   Hash,
+  MessageCircle,
   Scale,
+  Timer,
+  Waves,
+  XCircle,
 } from "lucide-react";
 
-type OrderBookLevel = {
+interface OrderBookLevel {
   price: number;
   size: number;
-};
+}
 
-type PreviousMarketOption = {
+interface PreviousMarketOption {
   slug: string;
   question: string;
-};
+}
 
-type MarketSnapshotProps = {
-  // Event-level
+interface Resolution {
+  status?: 'pending' | 'resolved_yes' | 'resolved_no' | 'voided' | 'unknown';
+  winning_outcome?: string;
+  resolved_at?: string;
+  final_yes_price?: number;
+  final_no_price?: number;
+}
+
+interface MarketSnapshotProps {
   eventTitle: string;
-  groupItemTitle?: string; // e.g. "50+ bps decrease"
+  groupItemTitle?: string;
   polymarketUrl: string;
-  closesIn: string; // preformatted, e.g. "23 days"
-  endDate?: string; // ISO date string for calculating time remaining
-  // Market-level
+  closesIn: string;
+  endDate?: string;
   question?: string;
   previousMarkets?: PreviousMarketOption[];
   onMarketSelect?: (slug: string) => void;
   activeMarketSlug?: string;
-
-  // Market-level prices (0–1)
   yesPrice: number;
   noPrice: number;
-
-  // Liquidity/volume
-  marketVolume: number; // per-market volume
+  marketVolume: number;
   volume24h?: number;
   liquidity?: number;
-
-  // Social / meta
   commentCount?: number;
   eventCommentCount?: number;
   seriesCommentCount?: number;
-
-  // Order-book snapshot (optional)
   bestBid?: number;
   bestAsk?: number;
   bids?: OrderBookLevel[];
   asks?: OrderBookLevel[];
-};
+  resolution?: Resolution;
+}
 
-function formatUsdCompact(value: number | undefined) {
+function formatUsdCompact(value: number | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -63,8 +65,31 @@ function formatUsdCompact(value: number | undefined) {
   return value.toFixed(0);
 }
 
+function getCountdownColor(endDate?: string): string {
+  if (!endDate) return "text-red-500";
 
-export function MarketSnapshotCard(props: MarketSnapshotProps) {
+  try {
+    const end = new Date(endDate).getTime();
+    if (Number.isNaN(end)) return "text-red-500";
+
+    const now = Date.now();
+    const diffMs = Math.max(0, end - now);
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    if (diffDays < 1) return "text-red-500";
+    if (diffDays < 7) return "text-yellow-500";
+    return "text-green-500";
+  } catch {
+    return "text-red-500";
+  }
+}
+
+function sumDepth(levels: OrderBookLevel[]): number {
+  return levels.slice(0, 3).reduce((acc, lvl) => acc + (lvl.size || 0), 0);
+}
+
+
+export function MarketSnapshotCard(props: MarketSnapshotProps): React.JSX.Element {
   const {
     eventTitle,
     groupItemTitle,
@@ -87,62 +112,35 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
     bestAsk,
     bids = [],
     asks = [],
+    resolution,
   } = props;
 
-  const [isMarketDropdownOpen, setIsMarketDropdownOpen] = React.useState(false);
+  const [isMarketDropdownOpen, setIsMarketDropdownOpen] = useState(false);
 
-  // Calculate time remaining and determine color
-  const getCountdownColor = (): string => {
-    if (!endDate) return "text-red-500"; // Default to red if no endDate
-    
-    try {
-      const end = new Date(endDate).getTime();
-      if (Number.isNaN(end)) return "text-red-500";
-      
-      const now = Date.now();
-      const diffMs = Math.max(0, end - now);
-      const diffDays = diffMs / (1000 * 60 * 60 * 24);
-      
-      if (diffDays < 1) {
-        return "text-red-500"; // Less than a day: red
-      } else if (diffDays < 7) {
-        return "text-yellow-500"; // Less than a week but more than a day: yellow
-      } else {
-        return "text-green-500"; // More than a week: green
-      }
-    } catch {
-      return "text-red-500";
-    }
-  };
-
-  const countdownColor = getCountdownColor();
-
+  const countdownColor = getCountdownColor(endDate);
   const yesPct = yesPrice * 100;
   const noPct = noPrice * 100;
   const impliedMultiplier = yesPrice > 0 ? (1 / yesPrice).toFixed(1) : "∞";
 
-  // Spread and mid-price
   const hasQuotes = typeof bestBid === "number" && typeof bestAsk === "number";
   const spread = hasQuotes ? Math.max(0, bestAsk! - bestBid!) : undefined;
   const mid = hasQuotes ? (bestAsk! + bestBid!) / 2 : undefined;
   const spreadPct = hasQuotes && mid && mid > 0 ? (spread! / mid) * 100 : undefined;
 
-  // Top-of-book depth (sum of first 1–3 levels)
-  const sumDepth = (levels: OrderBookLevel[]) =>
-    levels.slice(0, 3).reduce((acc, lvl) => acc + (lvl.size || 0), 0);
-
   const bidDepth = sumDepth(bids);
   const askDepth = sumDepth(asks);
 
   let depthLabel = "Balanced book";
-  if (bidDepth > askDepth * 1.4) depthLabel = "Bid-heavy";
-  else if (askDepth > bidDepth * 1.4) depthLabel = "Ask-heavy";
+  if (bidDepth > askDepth * 1.4) {
+    depthLabel = "Bid-heavy";
+  } else if (askDepth > bidDepth * 1.4) {
+    depthLabel = "Ask-heavy";
+  }
 
   return (
     <div
       id="market-snapshot-card"
-      className="rounded-3xl bg-white/30 p-6 shadow-[0_18px_45px_rgba(30,58,138,0.25)] backdrop-blur-[12px] overflow-visible"
-      style={{ WebkitBackdropFilter: "blur(12px)" }}
+      className="rounded-3xl bg-[#f3f4f6] p-6 shadow-neumorph-lg overflow-visible"
     >
       {/* Header: title + chips */}
       <div className="mb-3 flex items-start justify-between gap-3 overflow-visible">
@@ -244,12 +242,27 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
           )}
         </div>
         <div className="flex flex-col items-end gap-1">
-          {endDate ? (
+          {resolution?.status === 'resolved_yes' ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#e8f5e9] px-3 py-2 text-sm font-semibold text-emerald-800">
+              <CheckCircle2 className="h-5 w-5" />
+              Resolved: YES
+            </div>
+          ) : resolution?.status === 'resolved_no' ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#ffebee] px-3 py-2 text-sm font-semibold text-rose-900">
+              <XCircle className="h-5 w-5" />
+              Resolved: NO
+            </div>
+          ) : resolution?.status === 'voided' ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700">
+              Market Voided
+            </div>
+          ) : endDate ? (
             <div className="group relative inline-flex items-center gap-1 rounded-full bg-transparent px-2 py-2 text-sm cursor-help">
               <Timer className={`h-5 w-5 ${countdownColor} animate-pulse`} />
               <span className={countdownColor}>Closes in {closesIn}</span>
-              <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50">
-                <div className="bg-slate-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg whitespace-nowrap relative">
+              <div className="absolute top-full right-0 mt-2 hidden group-hover:block z-[9999]">
+                <div className="bg-slate-900 text-white text-xs rounded-lg py-2 px-3 shadow-xl whitespace-nowrap relative">
+                  <div className="absolute bottom-full right-4 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-slate-900"></div>
                   <div className="font-semibold mb-1">Closure Date</div>
                   <div>{new Date(endDate).toLocaleString('en-US', { 
                     weekday: 'long', 
@@ -259,7 +272,6 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
                     hour: '2-digit',
                     minute: '2-digit'
                   })}</div>
-                  <div className="absolute top-full right-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-slate-900"></div>
                 </div>
               </div>
             </div>
@@ -275,37 +287,49 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
       {/* 2x3 Grid: YES/NO/Metrics and Order Book/Comments */}
       <div className="mb-3 grid gap-3 text-xs sm:grid-cols-[1fr_1fr_auto]">
         {/* Row 1, Column 1: YES side */}
-        <div id="tile-yes" className="flex flex-col rounded-2xl bg-teal-700 p-3 ring-1 ring-teal-500/45">
+        <div 
+          id="tile-yes" 
+          className="flex flex-col rounded-2xl bg-[#e8f5e9] p-3"
+          style={{
+            boxShadow: '6px 6px 12px #c8d6c9, -6px -6px 12px #ffffff'
+          }}
+        >
           <div>
-            <p className="text-base font-semibold tracking-wide text-white">YES</p>
-            <p className="mt-1 text-3xl font-semibold text-white">
+            <p className="text-base font-semibold tracking-wide text-emerald-800">YES</p>
+            <p className="mt-1 text-3xl font-semibold text-emerald-900">
               {yesPrice.toFixed(3)}
-              <span className="ml-1 text-[11px] text-white/90">
+              <span className="ml-1 text-[11px] text-emerald-700">
                 ({yesPct.toFixed(1)}%)
               </span>
             </p>
-            <p className="mt-1 text-[10px] text-white/80">
+            <p className="mt-1 text-[10px] text-emerald-600">
               Implied multiplier:{" "}
-              <span className="text-white">{impliedMultiplier}x</span>
+              <span className="text-emerald-800">{impliedMultiplier}x</span>
             </p>
           </div>
-          <p className="mt-auto pt-2 text-[10px] text-white/70">
+          <p className="mt-auto pt-2 text-[10px] text-emerald-600/80">
             Cheap lottery ticket territory if you think the world is wrong.
           </p>
         </div>
 
         {/* Row 1, Column 2: NO side */}
-        <div id="tile-no" className="flex flex-col rounded-2xl bg-rose-700 p-3 ring-1 ring-rose-500/45">
+        <div 
+          id="tile-no" 
+          className="flex flex-col rounded-2xl bg-[#ffebee] p-3"
+          style={{
+            boxShadow: '6px 6px 12px #e6d3d5, -6px -6px 12px #ffffff'
+          }}
+        >
           <div>
-            <p className="text-base font-semibold tracking-wide text-white">NO</p>
-            <p className="mt-1 text-3xl font-semibold text-white">
+            <p className="text-base font-semibold tracking-wide text-rose-900">NO</p>
+            <p className="mt-1 text-3xl font-semibold text-rose-900">
               {noPrice.toFixed(3)}
-              <span className="ml-1 text-[11px] text-white/90">
+              <span className="ml-1 text-[11px] text-rose-900">
                 ({noPct.toFixed(1)}%)
               </span>
             </p>
           </div>
-          <p className="mt-auto pt-2 text-[10px] text-white/70">
+          <p className="mt-auto pt-2 text-[10px] text-rose-900/80">
             Market is basically saying &quot;no way&quot; right now.
           </p>
         </div>
@@ -445,7 +469,7 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
       </div>
 
       {/* Tags and Polymarket link - bottom row */}
-      <div className="flex items-center justify-between mt-3">
+      <div className="flex items-center mt-3">
         {groupItemTitle && (
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-slate-600 font-medium">Tags:</span>
@@ -459,7 +483,7 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
           href={polymarketUrl}
           target="_blank"
           rel="noreferrer"
-          className="group rounded-lg bg-white/90 px-2 py-1.5 flex items-center gap-1.5 hover:bg-white transition-colors"
+          className="group rounded-lg bg-white/90 px-2 py-1.5 flex items-center gap-1.5 hover:bg-white transition-colors ml-auto"
         >
           <img
             src="https://polymarket.com/favicon.ico"
@@ -478,5 +502,3 @@ export function MarketSnapshotCard(props: MarketSnapshotProps) {
     </div>
   );
 }
-
-

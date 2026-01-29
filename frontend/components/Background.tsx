@@ -1,6 +1,6 @@
 "use client";
 
-import React, { PropsWithChildren, useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import GridAndNoise from "./background/GridAndNoise";
 import TopNav from "./background/TopNav";
 import UrlInputBar from "./background/UrlInputBar";
@@ -22,129 +22,200 @@ import { SignalSkeleton } from "../components/skeletons/SignalSkeleton";
 import { ReportSkeleton } from "../components/skeletons/ReportSkeleton";
 import { logger } from "../lib/logger";
 
-export default function Background(_props: PropsWithChildren): React.JSX.Element {
-  void _props; // Props are unused in this component
+interface NewsArticle {
+  title?: string;
+  source?: string;
+  url?: string;
+  published_at?: string;
+  snippet?: string;
+  sentiment?: "bullish" | "bearish" | "neutral";
+}
+
+interface NewsContext {
+  articles?: NewsArticle[];
+  summary?: string;
+  combined_summary?: string;
+  tavily_queries?: string[];
+  queries?: Array<{
+    name?: string;
+    query?: string;
+    results?: NewsArticle[];
+    answer?: string;
+  }>;
+}
+
+interface OrderBookEntry {
+  price?: number;
+  size?: number;
+}
+
+interface MarketSnapshot {
+  question?: string;
+  url?: string;
+  slug?: string;
+  endDate?: string;
+  end_date?: string;
+  group_item_title?: string;
+  groupItemTitle?: string;
+  yes_price?: number;
+  no_price?: number;
+  volume?: string | number;
+  volume24hr?: number;
+  liquidity?: string | number;
+  comment_count?: number;
+  commentCount?: number;
+  event_comment_count?: number;
+  eventCommentCount?: number;
+  series_comment_count?: number;
+  seriesCommentCount?: number;
+  best_bid?: number;
+  bestBid?: number;
+  best_ask?: number;
+  bestAsk?: number;
+  order_book?: { bids?: OrderBookEntry[]; asks?: OrderBookEntry[] };
+  orderBook?: { bids?: OrderBookEntry[]; asks?: OrderBookEntry[] };
+}
+
+interface EventContext {
+  title?: string;
+  url?: string;
+  volume24hr?: number;
+  commentCount?: number;
+  seriesCommentCount?: number;
+}
+
+interface Signal {
+  direction?: string;
+  model_prob?: number;
+  model_prob_abs?: number;
+  confidence?: string;
+  rationale?: string;
+}
+
+interface Decision {
+  action?: string;
+  edge_pct?: number;
+  toy_kelly_fraction?: number;
+  notes?: string;
+}
+
+interface MarketOption {
+  slug?: string;
+  question?: string;
+  id?: string;
+  title?: string;
+}
+
+interface Resolution {
+  status?: 'pending' | 'resolved_yes' | 'resolved_no' | 'voided' | 'unknown';
+  winning_outcome?: string;
+  resolved_at?: string;
+  final_yes_price?: number;
+  final_no_price?: number;
+  checked_at?: string;
+}
+
+interface AnalysisResults {
+  market_snapshot?: MarketSnapshot;
+  event_context?: EventContext;
+  news_context?: NewsContext;
+  signal?: Signal;
+  decision?: Decision;
+  report?: string | { title?: string; markdown?: string } | Record<string, unknown>;
+  market_options?: MarketOption[];
+  requires_market_selection?: boolean;
+  resolution?: Resolution;
+}
+
+interface RunStatus {
+  market?: string;
+  news?: string;
+  signal?: string;
+  report?: string;
+}
+
+function mapConfigurationToBackend(config: AnalysisConfiguration): Record<string, unknown> {
+  return {
+    use_tavily_prompt_agent: config.useTavilyPromptAgent,
+    use_news_summary_agent: config.useNewsSummaryAgent,
+    max_articles: config.maxArticles,
+    max_articles_per_query: config.maxArticlesPerQuery,
+    min_confidence: config.minConfidence,
+    enable_sentiment_analysis: config.enableSentimentAnalysis,
+  };
+}
+
+function createEmptyResults(): AnalysisResults {
+  return {
+    market_snapshot: {},
+    event_context: {},
+    news_context: {},
+    signal: {},
+    decision: {},
+    report: {},
+  };
+}
+
+function createPendingStatus(): RunStatus {
+  return {
+    market: "pending",
+    news: "pending",
+    signal: "pending",
+    report: "pending",
+  };
+}
+
+function isValidRunId(runId: string | null | undefined): runId is string {
+  if (!runId || typeof runId !== "string") return false;
+  const trimmed = runId.trim();
+  return trimmed !== "" && trimmed !== "undefined" && trimmed !== "null";
+}
+
+function humanizeClosesIn(isoDate?: string): string {
+  if (!isoDate) return "—";
+  const end = new Date(isoDate).getTime();
+  if (Number.isNaN(end)) return "—";
+  const now = Date.now();
+  const diffMs = Math.max(0, end - now);
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays >= 1) return `${diffDays} day${diffDays === 1 ? "" : "s"}`;
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffHours >= 1) return `${diffHours} hr${diffHours === 1 ? "" : "s"}`;
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  return `${diffMins} min`;
+}
+
+export default function Background(): React.JSX.Element {
   const [isFocused, setIsFocused] = useState(false);
   const [url, setUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [configuration, setConfiguration] = useState<AnalysisConfiguration>(DEFAULT_CONFIG);
-  interface NewsArticle {
-    title?: string;
-    source?: string;
-    url?: string;
-    published_at?: string;
-    snippet?: string;
-    sentiment?: "bullish" | "bearish" | "neutral";
-  }
-
-  interface NewsContext {
-    articles?: NewsArticle[];
-    summary?: string;
-    combined_summary?: string;
-    tavily_queries?: string[];
-    queries?: Array<{
-      name?: string;
-      query?: string;
-      results?: NewsArticle[];
-      answer?: string;
-    }>;
-  }
-
-  interface AnalysisResults {
-    market_snapshot?: {
-      question?: string;
-      url?: string;
-      endDate?: string;
-      end_date?: string;
-      group_item_title?: string;
-      groupItemTitle?: string;
-      yes_price?: number;
-      no_price?: number;
-      volume?: string | number;
-      volume24hr?: number;
-      liquidity?: string | number;
-      comment_count?: number;
-      commentCount?: number;
-      event_comment_count?: number;
-      eventCommentCount?: number;
-      series_comment_count?: number;
-      seriesCommentCount?: number;
-      best_bid?: number;
-      bestBid?: number;
-      best_ask?: number;
-      bestAsk?: number;
-      order_book?: { bids?: Array<{ price?: number; size?: number }>; asks?: Array<{ price?: number; size?: number }> };
-      orderBook?: { bids?: Array<{ price?: number; size?: number }>; asks?: Array<{ price?: number; size?: number }> };
-    };
-    event_context?: {
-      title?: string;
-      url?: string;
-      volume24hr?: number;
-      commentCount?: number;
-      seriesCommentCount?: number;
-    };
-    news_context?: NewsContext;
-    signal?: {
-      direction?: string;
-      model_prob?: number;
-      model_prob_abs?: number;
-      confidence?: string;
-      rationale?: string;
-    };
-    decision?: {
-      action?: string;
-      edge_pct?: number;
-      toy_kelly_fraction?: number;
-      notes?: string;
-    };
-    report?: string | { title?: string; markdown?: string } | Record<string, unknown>;
-    market_options?: Array<{ slug?: string; question?: string; id?: string }>;
-    requires_market_selection?: boolean;
-  }
-
   const [results, setResults] = useState<AnalysisResults | null>(null);
   const [lastSortedMarketOptions, setLastSortedMarketOptions] = useState<
     { slug: string; question: string }[]
   >([]);
   const [selectedMarketSlug, setSelectedMarketSlug] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
-  const [runStatus, setRunStatus] = useState<{
-    market?: string;
-    news?: string;
-    signal?: string;
-    report?: string;
-  } | null>(null);
+  const [runStatus, setRunStatus] = useState<RunStatus | null>(null);
   const pollingRef = useRef<boolean>(false);
   const runIdRef = useRef<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [recentSessionsRefreshTrigger, setRecentSessionsRefreshTrigger] = useState(0);
 
   const mapMarketOptions = useCallback(
-    (
-      options: Array<{ slug?: string; question?: string; id?: string; title?: string }> | undefined | null
-    ) => {
-      if (!Array.isArray(options)) {
-        return [];
-      }
+    (options: MarketOption[] | undefined | null): { slug: string; question: string }[] => {
+      if (!Array.isArray(options)) return [];
+
       return options
         .map((option) => {
           const slug = option?.slug ?? option?.id;
-          if (!slug) {
-            return null;
-          }
+          if (!slug) return null;
           return {
             slug: String(slug),
             question: option?.question || option?.title || String(slug),
           };
         })
-        .filter(
-          (
-            option,
-          ): option is {
-            slug: string;
-            question: string;
-          } => Boolean(option)
-        );
+        .filter((option): option is { slug: string; question: string } => option !== null);
     },
     [],
   );
@@ -188,6 +259,7 @@ export default function Background(_props: PropsWithChildren): React.JSX.Element
         decision: savedRun.decision || {},
         report: savedRun.report || {},
         requires_market_selection: false,
+        resolution: savedRun.resolution,
       };
 
       // Set run status based on saved status
@@ -211,40 +283,43 @@ export default function Background(_props: PropsWithChildren): React.JSX.Element
     }
   }, []);
 
-  const handleSubmit = async () => {
-    // Prevent duplicate submissions
-    if (!url.trim() || isSubmitting) {
-      return;
-    }
-    
-    // Stop any existing polling before starting a new submission
+  const resetAnalysisState = useCallback(() => {
     pollingRef.current = false;
     setIsSubmitting(true);
     setResults(null);
     setRunStatus(null);
     setRunId(null);
-    setSelectedRunId(null); // Clear selected run when starting new analysis
+    setSelectedRunId(null);
     runIdRef.current = null;
-    pollingRef.current = false;
-    
+  }, []);
+
+  const startPollingWithRunId = useCallback((newRunId: string) => {
+    runIdRef.current = newRunId;
+    pollingRef.current = true;
+    setRunId(newRunId);
+    setResults(createEmptyResults());
+    setRunStatus(createPendingStatus());
+  }, []);
+
+  const showError = useCallback((message: string) => {
+    if (typeof window !== "undefined") {
+      window.alert(message);
+    }
+  }, []);
+
+  const handleSubmit = async () => {
+    if (!url.trim() || isSubmitting) return;
+
+    resetAnalysisState();
+
     try {
-      const requestBody = {
-        market_url: url.trim(),
-        configuration: {
-          use_tavily_prompt_agent: configuration.useTavilyPromptAgent,
-          use_news_summary_agent: configuration.useNewsSummaryAgent,
-          max_articles: configuration.maxArticles,
-          max_articles_per_query: configuration.maxArticlesPerQuery,
-          min_confidence: configuration.minConfidence,
-          enable_sentiment_analysis: configuration.enableSentimentAnalysis,
-        },
-      };
       const response = await fetch("/api/analyze/start", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          market_url: url.trim(),
+          configuration: mapConfigurationToBackend(configuration),
+        }),
       });
 
       if (!response.ok) {
@@ -254,146 +329,82 @@ export default function Background(_props: PropsWithChildren): React.JSX.Element
       }
 
       const data = await response.json();
-      
-      // Validate run_id exists - backend returns { "run_id": "run-..." }
+
       if (!data.run_id) {
         logger.error("No run_id in response:", data);
         throw new Error("Backend did not return run_id");
       }
-      
+
       const newRunId = String(data.run_id).trim();
-      if (!newRunId || newRunId === 'undefined' || newRunId === 'null') {
+      if (!isValidRunId(newRunId)) {
         logger.error("Invalid run_id:", newRunId);
         throw new Error("Invalid run_id received from backend");
       }
-      
-      // Set run_id to start polling - must use data.run_id (snake_case)
-      // Set ref first for immediate access, then state for React updates
-      runIdRef.current = newRunId;
-      pollingRef.current = true;
-      setRunId(newRunId);
-      
-      // Initialize with empty results to show skeletons
-      setResults({
-        market_snapshot: {},
-        event_context: {},
-        news_context: {},
-        signal: {},
-        decision: {},
-        report: {},
-      });
-      setRunStatus({
-        market: "pending",
-        news: "pending",
-        signal: "pending",
-        report: "pending",
-      });
+
+      startPollingWithRunId(newRunId);
     } catch (error) {
       logger.error("Error submitting URL:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to start analysis. Please try again.";
-      // TODO: Replace with toast notification system
-      // For now, using a more user-friendly approach than alert()
-      if (typeof window !== 'undefined') {
-        // In a production app, this would use a toast library like react-hot-toast
-        // For MVP, we'll log and show a simple message
-        window.alert(errorMessage);
-      }
+      showError(errorMessage);
       setIsSubmitting(false);
     }
   };
 
   const handleSelectMarket = async (marketSlug: string) => {
+    resetAnalysisState();
+
     try {
-      setIsSubmitting(true);
-      setResults(null);
-      setRunStatus(null);
-      setRunId(null);
-      setSelectedRunId(null); // Clear selected run when starting new analysis
-      runIdRef.current = null;
-      pollingRef.current = false;
-      
-      const body = {
-        market_url: url.trim(),
-        selected_market_slug: marketSlug,
-        configuration: {
-          use_tavily_prompt_agent: configuration.useTavilyPromptAgent,
-          use_news_summary_agent: configuration.useNewsSummaryAgent,
-          max_articles: configuration.maxArticles,
-          max_articles_per_query: configuration.maxArticlesPerQuery,
-          min_confidence: configuration.minConfidence,
-          enable_sentiment_analysis: configuration.enableSentimentAnalysis,
-        },
-      };
       const response = await fetch("/api/analyze/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          market_url: url.trim(),
+          selected_market_slug: marketSlug,
+          configuration: mapConfigurationToBackend(configuration),
+        }),
       });
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
         const errorMessage = errorData.detail || errorData.error || errorData.details || `HTTP error! status: ${response.status}`;
         throw new Error(errorMessage);
       }
+
       const data = await response.json();
-      
-      // Validate run_id exists
+
       if (!data.run_id) {
         logger.error("No run_id in response:", data);
         throw new Error("Server did not return a run_id");
       }
-      
+
       const newRunId = String(data.run_id).trim();
-      if (!newRunId || newRunId === 'undefined' || newRunId === 'null') {
+      if (!isValidRunId(newRunId)) {
         logger.error("Invalid run_id:", newRunId);
         throw new Error("Invalid run_id received from backend");
       }
-      
-      // Set run_id to start polling
-      // Set ref first for immediate access, then state for React updates
-      runIdRef.current = newRunId;
-      pollingRef.current = true;
-      setRunId(newRunId);
-      
-      // Initialize with empty results to show skeletons
-      setResults({
-        market_snapshot: {},
-        event_context: {},
-        news_context: {},
-        signal: {},
-        decision: {},
-        report: {},
-      });
-      setRunStatus({
-        market: "pending",
-        news: "pending",
-        signal: "pending",
-        report: "pending",
-      });
-    } catch (e) {
-      logger.error("Error selecting market:", e);
-      const errorMessage = e instanceof Error ? e.message : "Failed to analyze selected market. Please try again.";
-      // TODO: Replace with toast notification system
-      if (typeof window !== 'undefined') {
-        window.alert(errorMessage);
-      }
+
+      startPollingWithRunId(newRunId);
+    } catch (error) {
+      logger.error("Error selecting market:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to analyze selected market. Please try again.";
+      showError(errorMessage);
       setIsSubmitting(false);
     }
   };
 
   const handleSortedOptionsChange = useCallback(
-    (options: Array<{ slug?: string; question?: string; id?: string; title?: string }>) => {
+    (options: MarketOption[]) => {
       const mapped = mapMarketOptions(options);
-      // Only update if the options have actually changed (prevent infinite loops)
       setLastSortedMarketOptions((prev) => {
-        if (prev.length === mapped.length && 
-            prev.every((p, i) => p.slug === mapped[i]?.slug && p.question === mapped[i]?.question)) {
-          return prev; // No change, return previous to prevent re-render
-        }
-        return mapped;
+        const hasChanged =
+          prev.length !== mapped.length ||
+          prev.some((p, i) => p.slug !== mapped[i]?.slug || p.question !== mapped[i]?.question);
+        return hasChanged ? mapped : prev;
       });
     },
     [mapMarketOptions],
   );
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -401,222 +412,143 @@ export default function Background(_props: PropsWithChildren): React.JSX.Element
     }
   };
 
-  const humanizeClosesIn = (isoDate?: string) => {
-    if (!isoDate) return "—";
-    const end = new Date(isoDate).getTime();
-    if (Number.isNaN(end)) return "—";
-    const now = Date.now();
-    const diffMs = Math.max(0, end - now);
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (diffDays >= 1) return `${diffDays} day${diffDays === 1 ? "" : "s"}`;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    if (diffHours >= 1) return `${diffHours} hr${diffHours === 1 ? "" : "s"}`;
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    return `${diffMins} min`;
-  };
-
   // Polling effect for phased analysis
   useEffect(() => {
-    // Guard: don't poll if runId is falsy (null, undefined, empty string)
-    // This prevents GET /api/run/undefined
-    
-    // Use ref as fallback if state hasn't updated yet (React state updates are async)
     const effectiveRunId = runId || runIdRef.current;
-    
-    // No run in progress yet – silently skip (expected on initial mount)
-    if (!effectiveRunId) {
-      return;
-    }
-    
-    // If we have a value but it's not a string, skip
-    if (typeof effectiveRunId !== "string") {
-      return;
-    }
-    
-    // Prevent multiple polling instances for the same runId
-    if (!pollingRef.current) {
-      return;
-    }
-    
-    const trimmedRunId = effectiveRunId.trim();
-    if (trimmedRunId === '' || trimmedRunId === 'undefined' || trimmedRunId === 'null') {
-      return;
-    }
+    if (!isValidRunId(effectiveRunId) || !pollingRef.current) return;
 
-    // Capture runId in a const to avoid closure issues
-    const currentRunId = trimmedRunId;
+    const currentRunId = effectiveRunId.trim();
     let cancelled = false;
 
-    async function poll() {
-      if (cancelled || !pollingRef.current) {
-        return;
+    const scheduleNextPoll = (delay: number) => {
+      if (!cancelled && pollingRef.current) {
+        window.setTimeout(poll, delay);
       }
+    };
 
-      // Use the captured runId from the effect closure - double-check it's valid
-      const runIdToUse = currentRunId;
-      if (!runIdToUse || typeof runIdToUse !== 'string' || runIdToUse.trim() === '' || runIdToUse === 'undefined' || runIdToUse === 'null') {
-        logger.error("runId is invalid in poll function!", runIdToUse);
-        return;
-      }
+    const stopPolling = () => {
+      pollingRef.current = false;
+      setIsSubmitting(false);
+    };
+
+    const hasNonEmptyObject = (obj: unknown): boolean =>
+      obj !== null && typeof obj === "object" && Object.keys(obj).length > 0;
+
+    const isMarketSelectionRequired = (run: Record<string, unknown>): boolean =>
+      Array.isArray(run.market_options) &&
+      run.market_options.length > 0 &&
+      !hasNonEmptyObject(run.market_snapshot);
+
+    const updateResultsFromRun = (run: Record<string, unknown>) => {
+      setResults((prev) => {
+        const updated: AnalysisResults = prev ? { ...prev } : createEmptyResults();
+        const status = run.status as RunStatus | undefined;
+
+        if (status?.market === "done") {
+          if (hasNonEmptyObject(run.market_snapshot)) {
+            updated.market_snapshot = run.market_snapshot as MarketSnapshot;
+          }
+          if (run.event_context) {
+            updated.event_context = run.event_context as EventContext;
+          }
+          if (Array.isArray(run.market_options) && run.market_options.length > 0) {
+            updated.market_options = run.market_options as MarketOption[];
+            updated.requires_market_selection = !hasNonEmptyObject(run.market_snapshot);
+          }
+        }
+
+        if (status?.news === "done" && run.news_context) {
+          updated.news_context = run.news_context as NewsContext;
+          const newsCtx = run.news_context as NewsContext;
+          const articlesCount = Array.isArray(newsCtx.articles) ? newsCtx.articles.length : 0;
+          logger.debug(
+            "News context received from backend",
+            run.run_id as string,
+            `articles: ${articlesCount}`,
+            `has_summary: ${!!newsCtx.summary}`,
+            `keys: ${Object.keys(newsCtx).join(", ")}`,
+          );
+        }
+
+        if (status?.signal === "done" && run.signal) {
+          updated.signal = run.signal as Signal;
+          updated.decision = (run.decision as Decision) || updated.decision;
+        }
+
+        if (status?.report === "done" && run.report) {
+          updated.report = run.report as AnalysisResults["report"];
+        }
+
+        // Include resolution data if available
+        if (run.resolution) {
+          updated.resolution = run.resolution as AnalysisResults["resolution"];
+        }
+
+        return updated;
+      });
+    };
+
+    async function poll() {
+      if (cancelled || !pollingRef.current) return;
 
       try {
-        const response = await fetch(`/api/run/${runIdToUse}`);
+        const response = await fetch(`/api/run/${currentRunId}`);
+
         if (!response.ok) {
           if (response.status === 404) {
-            // Run not found yet, keep polling
-            window.setTimeout(poll, 1500);
+            scheduleNextPoll(1500);
             return;
           }
-          // For 500 errors, try to get more details and retry
           if (response.status === 500) {
-            // Try to parse error details (for potential future use in logging)
-            try {
-              const errorData = await response.json();
-              const _errorDetail = errorData.detail || errorData.error || "Internal server error";
-              // Could log _errorDetail here if needed
-            } catch {
-              // Ignore JSON parse errors
-            }
-            // Retry after a longer delay for server errors
-            window.setTimeout(poll, 3000);
+            scheduleNextPoll(3000);
             return;
           }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data = await response.json();
-        
-        // Backend returns { run: { ... } } - must read data.run
         const run = data.run;
 
         if (!run) {
-          // Run not found yet, keep polling
-          if (!cancelled) {
-            window.setTimeout(poll, 1500);
-          }
+          scheduleNextPoll(1500);
           return;
         }
 
-        if (!cancelled) {
-          // Update status from run.status
-          if (run.status) {
-            setRunStatus(run.status);
+        if (cancelled) return;
+
+        if (run.status) {
+          setRunStatus(run.status);
+        }
+
+        updateResultsFromRun(run);
+
+        if (isMarketSelectionRequired(run)) {
+          setResults((prev) =>
+            prev ? { ...prev, requires_market_selection: true, market_options: run.market_options } : prev
+          );
+          stopPolling();
+          return;
+        }
+
+        const status = run.status || {};
+        const phases = Object.values(status);
+        const allComplete = phases.length > 0 && phases.every((s) => s === "done" || s === "error");
+
+        if (allComplete) {
+          stopPolling();
+          if (run.market_snapshot?.slug) {
+            setSelectedMarketSlug(run.market_snapshot.slug);
           }
-
-          // Update results as phases complete
-          setResults((prevResults) => {
-            if (!prevResults) {
-              // Initialize with empty structure if needed
-              return {
-                market_snapshot: {},
-                event_context: {},
-                news_context: {},
-                signal: {},
-                decision: {},
-                report: {},
-              };
-            }
-            
-            const updatedResults: AnalysisResults = { ...prevResults };
-            
-            if (run.status?.market === "done") {
-              if (run.market_snapshot && Object.keys(run.market_snapshot).length > 0) {
-                updatedResults.market_snapshot = run.market_snapshot;
-              }
-              if (run.event_context) {
-                updatedResults.event_context = run.event_context;
-              }
-              if (run.market_options && Array.isArray(run.market_options) && run.market_options.length > 0) {
-                updatedResults.market_options = run.market_options;
-                // Only require market selection if market_snapshot is empty or missing
-                if (!run.market_snapshot || Object.keys(run.market_snapshot).length === 0) {
-                  updatedResults.requires_market_selection = true;
-                } else {
-                  updatedResults.requires_market_selection = false;
-                }
-              }
-            }
-            
-            if (run.status?.news === "done" && run.news_context) {
-              updatedResults.news_context = run.news_context;
-              // Debug logging for news context
-              const articlesCount = Array.isArray(run.news_context.articles) 
-                ? run.news_context.articles.length 
-                : 0;
-              logger.debug(
-                "News context received from backend",
-                run.run_id,
-                `articles: ${articlesCount}`,
-                `has_summary: ${!!run.news_context.summary}`,
-                `keys: ${Object.keys(run.news_context).join(", ")}`,
-              );
-            }
-            
-            if (run.status?.signal === "done" && run.signal) {
-              updatedResults.signal = run.signal;
-              updatedResults.decision = run.decision || updatedResults.decision;
-            }
-            
-            if (run.status?.report === "done" && run.report) {
-              updatedResults.report = run.report;
-            }
-
-            return updatedResults;
-          });
-
-          // Check if market selection is required
-          const requiresMarketSelection =
-            run.market_options &&
-            Array.isArray(run.market_options) &&
-            run.market_options.length > 0 &&
-            (!run.market_snapshot || Object.keys(run.market_snapshot).length === 0);
-
-          if (requiresMarketSelection) {
-            // Set requires_market_selection in results state
-            setResults((prevResults) => {
-              if (!prevResults) return prevResults;
-              return {
-                ...prevResults,
-                requires_market_selection: true,
-                market_options: run.market_options,
-              };
-            });
-            // Market selection required - stop polling and wait for user selection
-            pollingRef.current = false;
-            setIsSubmitting(false);
-            return;
-          }
-
-          // Check if all phases are done or errored
-          const status = run.status || {};
-          const phases = Object.values(status);
-          const allDoneOrError =
-            phases.length > 0 &&
-            phases.every((s) => s === "done" || s === "error");
-
-          if (allDoneOrError) {
-            pollingRef.current = false;
-            setIsSubmitting(false);
-            if (run.market_snapshot?.slug) {
-              setSelectedMarketSlug(run.market_snapshot.slug);
-            }
-            // Refresh recent sessions when analysis completes
-            setRecentSessionsRefreshTrigger((prev) => prev + 1);
-          } else {
-            // Schedule next poll
-            window.setTimeout(poll, 1500);
-          }
+          setRecentSessionsRefreshTrigger((prev) => prev + 1);
+        } else {
+          scheduleNextPoll(1500);
         }
       } catch (error) {
         logger.error("Error polling run status:", error);
-        if (!cancelled && pollingRef.current) {
-          // Log network errors during polling (don't show alert to avoid spam)
-          if (error instanceof Error && error.message.includes("Network error")) {
-            logger.warn("Network error while polling:", error.message);
-          }
-          // Retry after longer delay on error
-          window.setTimeout(poll, 2500);
+        if (error instanceof Error && error.message.includes("Network error")) {
+          logger.warn("Network error while polling:", error.message);
         }
+        scheduleNextPoll(2500);
       }
     }
 
@@ -627,41 +559,75 @@ export default function Background(_props: PropsWithChildren): React.JSX.Element
     };
   }, [runId]);
 
-  // Map backend news articles to NewsCard format
   const mapNewsArticles = useCallback((newsContext?: NewsContext) => {
-    if (!newsContext?.articles || !Array.isArray(newsContext.articles) || newsContext.articles.length === 0) {
+    const articles = newsContext?.articles;
+    if (!Array.isArray(articles) || articles.length === 0) {
       logger.debug(
         "No articles to map",
         `has_context: ${!!newsContext}`,
-        `articles_type: ${typeof newsContext?.articles}`,
-        `articles_length: ${newsContext?.articles?.length ?? 0}`,
-        `is_array: ${Array.isArray(newsContext?.articles)}`,
+        `articles_length: ${articles?.length ?? 0}`,
       );
       return [];
     }
-    
-    logger.debug("Mapping news articles", `count: ${newsContext.articles.length}`);
 
-    return newsContext.articles.map((article) => ({
+    logger.debug("Mapping news articles", `count: ${articles.length}`);
+
+    return articles.map((article) => ({
       title: article.title || "Untitled",
       source: article.source || "Unknown source",
       publishedAt: article.published_at || undefined,
       url: article.url || undefined,
       summary: article.snippet || undefined,
-      sentiment: article.sentiment || "neutral", // Include sentiment from backend
+      sentiment: article.sentiment || "neutral",
     }));
   }, []);
 
+  const shouldShowMarketSelection =
+    results?.requires_market_selection &&
+    (!results.market_snapshot || Object.keys(results.market_snapshot).length === 0) &&
+    results.market_options &&
+    results.market_options.length > 0;
+
+  const hasMarketSnapshot =
+    runStatus?.market === "done" &&
+    results?.market_snapshot &&
+    Object.keys(results.market_snapshot).length > 0;
+
+  const isMarketPending = runStatus?.market === "pending" || runStatus?.market === undefined;
+  const isNewsPending = runStatus?.news === "pending" || runStatus?.news === undefined;
+  const isSignalPending = runStatus?.signal === "pending" || runStatus?.signal === undefined;
+  const isReportPending = runStatus?.report === "pending" || runStatus?.report === undefined;
+
+  const hasNewsContent = (ctx?: NewsContext): boolean => {
+    if (!ctx) return false;
+    const hasArticles = Array.isArray(ctx.articles) && ctx.articles.length > 0;
+    const hasSummary = !!ctx.summary?.trim();
+    const hasCombinedSummary = !!ctx.combined_summary?.trim();
+    return hasArticles || hasSummary || hasCombinedSummary;
+  };
+
+  const handleNewsItemClick = useCallback((item: { url?: string }) => {
+    if (item.url) {
+      window.open(item.url, "_blank", "noopener,noreferrer");
+    }
+  }, []);
+
+  const mapOrderBook = (entries: OrderBookEntry[] | undefined) =>
+    (entries || []).map((entry) => ({
+      price: Number(entry.price ?? 0),
+      size: Number(entry.size ?? 0),
+    }));
+
   return (
-    <section id="app-root" className="relative min-h-screen overflow-hidden bg-white text-neutral-900">
+    <section id="app-root" className={`relative bg-white text-neutral-900 ${!results ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
       {/* Soft grid + noise background, hero-style */}
       <GridAndNoise />
 
       {/* Tailwind CSS grid: 2 rows × 3 columns (2-8-2).
           - Row 1 (auto) has three cells; each gets top & bottom borders.
-          - Row 2 (1fr) fills remaining height.
+          - Row 2 (1fr) fills remaining height when empty, auto when content exists.
           - Columns have left/right borders so vertical lines span both rows. */}
-      <div id="app-grid" className="grid min-h-screen w-full grid-rows-[auto,1fr] grid-cols-[minmax(0,2fr)_minmax(0,8fr)_minmax(0,2fr)]">
+      <div id="app-grid" className={`grid w-full grid-cols-[minmax(0,2fr)_minmax(0,8fr)_minmax(0,2fr)] ${!results ? 'h-full grid-rows-[auto,1fr]' : 'grid-rows-[auto,auto]'}`}>
         {/* Row 1, Col 1 */}
         <div className="border-y border-l border-neutral-300 bg-white/90">
           <div className="h-10" />
@@ -683,7 +649,7 @@ export default function Background(_props: PropsWithChildren): React.JSX.Element
         />
 
         {/* Row 2, Col 2 */}
-        <div className="border-x border-neutral-300 bg-white/90 flex flex-col">
+        <div className={`border-x border-neutral-300 bg-white/90 flex flex-col ${!results ? 'overflow-hidden' : ''}`}>
           {/* Row 1: Input field in a grid */}
           <div id="input-row" className="grid grid-cols-[1fr_2fr_1fr] border-b border-neutral-300">
             <div className="p-4">{/* Cell 1 */}</div>
@@ -702,129 +668,87 @@ export default function Background(_props: PropsWithChildren): React.JSX.Element
           </div>
 
           {/* Row 2: Analysis results (or selection UI) */}
-          <div className="p-4" id="results-pane">
-            {results ? (
-              <>
-                {/* Show market selection if required, otherwise show analysis results */}
-                {results.requires_market_selection && 
-                 (!results.market_snapshot || Object.keys(results.market_snapshot).length === 0) &&
-                 results.market_options && 
-                 results.market_options.length > 0 ? (
-                  <MarketSelection
-                    options={results.market_options.filter((opt): opt is { slug: string; question?: string; id?: string } => !!opt.slug)}
-                    eventContext={results.event_context}
-                    isSubmitting={isSubmitting}
-                    onSelect={handleSelectMarket}
-                    onSortedOptionsChange={handleSortedOptionsChange}
-                  />
-                ) : (
-                  <div>
-                    {/* Market Snapshot - show skeleton if pending, card if done */}
-                    {(() => {
-                      const shouldShowMarketCard = runStatus?.market === "done" && results.market_snapshot && Object.keys(results.market_snapshot).length > 0;
-                      const shouldShowMarketSkeleton = runStatus?.market === "pending" || runStatus?.market === undefined;
-                      
-                      if (shouldShowMarketCard && results.market_snapshot) {
-                        return (
-                      <div className="mb-6">
-                      <MarketSnapshotCard
-                    eventTitle={results.event_context?.title || results.market_snapshot.question || "Event"}
-                    groupItemTitle={results.market_snapshot.group_item_title || results.market_snapshot.groupItemTitle}
-                    polymarketUrl={results.market_snapshot.url || results.event_context?.url || url || "#"}
-                    closesIn={humanizeClosesIn(results.market_snapshot.endDate || results.market_snapshot.end_date)}
-                    endDate={results.market_snapshot.endDate || results.market_snapshot.end_date}
-                    question={results.market_snapshot.question}
-                    previousMarkets={
-                      lastSortedMarketOptions.length > 0
-                        ? lastSortedMarketOptions
-                        : mapMarketOptions(results.market_options)
-                    }
-                    activeMarketSlug={selectedMarketSlug ?? undefined}
-                    onMarketSelect={handleSelectMarket}
-                    yesPrice={results.market_snapshot.yes_price ?? 0}
-                    noPrice={results.market_snapshot.no_price ?? 0}
-                    marketVolume={Number(results.market_snapshot.volume ?? 0)}
-                    volume24h={results.market_snapshot.volume24hr || results.event_context?.volume24hr}
-                    liquidity={Number(results.market_snapshot.liquidity ?? 0)}
-                    commentCount={results.event_context?.commentCount ?? results.market_snapshot?.comment_count ?? results.market_snapshot?.commentCount}
-                    eventCommentCount={
-                      results.event_context?.commentCount ??
-                      results.market_snapshot?.event_comment_count ??
-                      results.market_snapshot?.eventCommentCount
-                    }
-                    seriesCommentCount={
-                      results.event_context?.seriesCommentCount ??
-                      results.market_snapshot?.series_comment_count ??
-                      results.market_snapshot?.seriesCommentCount
-                    }
-                    bestBid={results.market_snapshot.best_bid ?? results.market_snapshot.bestBid}
-                    bestAsk={results.market_snapshot.best_ask ?? results.market_snapshot.bestAsk}
-                    bids={(results.market_snapshot.order_book?.bids || results.market_snapshot.orderBook?.bids || []).map((b: { price?: number; size?: number }) => ({
-                      price: Number(b.price ?? 0),
-                      size: Number(b.size ?? 0),
-                    }))}
-                    asks={(results.market_snapshot.order_book?.asks || results.market_snapshot.orderBook?.asks || []).map((a: { price?: number; size?: number }) => ({
-                      price: Number(a.price ?? 0),
-                      size: Number(a.size ?? 0),
-                    }))}
-                  />
-                  </div>
-                    );
-                  } else if (shouldShowMarketSkeleton) {
-                    return (
-                      <div className="mb-6">
-                        <MarketSnapshotSkeleton />
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
+          <div className={`p-4 ${!results ? 'flex-1' : ''}`} id="results-pane">
+            {!results && <EmptyPrompt />}
 
-                    {/* News - show skeleton if pending, card if done */}
-                    {runStatus?.news === "done" && results.news_context ? (
-                      // Show card if we have articles, summary, or combined_summary
-                      (results.news_context.articles && Array.isArray(results.news_context.articles) && results.news_context.articles.length > 0) ||
-                      (results.news_context.summary && results.news_context.summary.trim().length > 0) ||
-                      (results.news_context.combined_summary && results.news_context.combined_summary.trim().length > 0) ? (
-                        <div className="mb-6">
-                          <NewsCard
-                            heading="Market News & Analysis"
-                            highlights={mapNewsArticles(results.news_context)}
-                            isLoading={false}
-                            newsSummary={results.news_context.summary}
-                            combinedSummary={results.news_context.combined_summary}
-                            onItemClick={(item) => {
-                              if (item.url) {
-                                window.open(item.url, "_blank", "noopener,noreferrer");
-                              }
-                            }}
-                          />
-                        </div>
-                      ) : null
-                    ) : runStatus?.news === "pending" || runStatus?.news === undefined ? (
-                      <div className="mb-6">
-                        <NewsSkeleton />
-                      </div>
-                    ) : null}
+            {results && shouldShowMarketSelection && (
+              <MarketSelection
+                options={results.market_options!.filter((opt): opt is { slug: string; question?: string; id?: string } => !!opt.slug)}
+                eventContext={results.event_context}
+                isSubmitting={isSubmitting}
+                onSelect={handleSelectMarket}
+                onSortedOptionsChange={handleSortedOptionsChange}
+              />
+            )}
 
-                    {/* Signal - show skeleton if pending, card if done */}
-                    {runStatus?.signal === "done" && results.signal && Object.keys(results.signal).length > 0 ? (
-                      <SignalCard signal={results.signal} />
-                    ) : runStatus?.signal === "pending" || runStatus?.signal === undefined ? (
-                      <SignalSkeleton />
-                    ) : null}
-
-                    {/* Report - show skeleton if pending, card if done */}
-                    {runStatus?.report === "done" && results.report ? (
-                      <ReportCard report={results.report} eventContext={results.event_context} />
-                    ) : runStatus?.report === "pending" || runStatus?.report === undefined ? (
-                      <ReportSkeleton />
-                    ) : null}
+            {results && !shouldShowMarketSelection && (
+              <div>
+                {/* Market Snapshot */}
+                {hasMarketSnapshot && results.market_snapshot && (
+                  <div className="mb-6">
+                    <MarketSnapshotCard
+                      eventTitle={results.event_context?.title || results.market_snapshot.question || "Event"}
+                      groupItemTitle={results.market_snapshot.group_item_title || results.market_snapshot.groupItemTitle}
+                      polymarketUrl={results.market_snapshot.url || results.event_context?.url || url || "#"}
+                      closesIn={humanizeClosesIn(results.market_snapshot.endDate || results.market_snapshot.end_date)}
+                      endDate={results.market_snapshot.endDate || results.market_snapshot.end_date}
+                      question={results.market_snapshot.question}
+                      previousMarkets={lastSortedMarketOptions.length > 0 ? lastSortedMarketOptions : mapMarketOptions(results.market_options)}
+                      activeMarketSlug={selectedMarketSlug ?? undefined}
+                      onMarketSelect={handleSelectMarket}
+                      yesPrice={results.market_snapshot.yes_price ?? 0}
+                      noPrice={results.market_snapshot.no_price ?? 0}
+                      marketVolume={Number(results.market_snapshot.volume ?? 0)}
+                      volume24h={results.market_snapshot.volume24hr || results.event_context?.volume24hr}
+                      liquidity={Number(results.market_snapshot.liquidity ?? 0)}
+                      commentCount={results.event_context?.commentCount ?? results.market_snapshot.comment_count ?? results.market_snapshot.commentCount}
+                      eventCommentCount={results.event_context?.commentCount ?? results.market_snapshot.event_comment_count ?? results.market_snapshot.eventCommentCount}
+                      seriesCommentCount={results.event_context?.seriesCommentCount ?? results.market_snapshot.series_comment_count ?? results.market_snapshot.seriesCommentCount}
+                      bestBid={results.market_snapshot.best_bid ?? results.market_snapshot.bestBid}
+                      bestAsk={results.market_snapshot.best_ask ?? results.market_snapshot.bestAsk}
+                      bids={mapOrderBook(results.market_snapshot.order_book?.bids || results.market_snapshot.orderBook?.bids)}
+                      asks={mapOrderBook(results.market_snapshot.order_book?.asks || results.market_snapshot.orderBook?.asks)}
+                      resolution={results.resolution}
+                    />
                   </div>
                 )}
-              </>
-            ) : (
-              <EmptyPrompt />
+                {isMarketPending && (
+                  <div className="mb-6">
+                    <MarketSnapshotSkeleton />
+                  </div>
+                )}
+
+                {/* News */}
+                {runStatus?.news === "done" && hasNewsContent(results.news_context) && (
+                  <div className="mb-6">
+                    <NewsCard
+                      heading="Market News & Analysis"
+                      highlights={mapNewsArticles(results.news_context)}
+                      isLoading={false}
+                      newsSummary={results.news_context?.summary}
+                      combinedSummary={results.news_context?.combined_summary}
+                      onItemClick={handleNewsItemClick}
+                    />
+                  </div>
+                )}
+                {isNewsPending && (
+                  <div className="mb-6">
+                    <NewsSkeleton />
+                  </div>
+                )}
+
+                {/* Signal */}
+                {runStatus?.signal === "done" && results.signal && Object.keys(results.signal).length > 0 && (
+                  <SignalCard signal={results.signal} />
+                )}
+                {isSignalPending && <SignalSkeleton />}
+
+                {/* Report */}
+                {runStatus?.report === "done" && results.report && (
+                  <ReportCard report={results.report} eventContext={results.event_context} />
+                )}
+                {isReportPending && <ReportSkeleton />}
+              </div>
             )}
           </div>
         </div>

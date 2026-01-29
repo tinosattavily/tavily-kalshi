@@ -152,9 +152,9 @@ def with_circuit_breaker(circuit: CircuitBreaker):
                 result = func(*args, **kwargs)
                 circuit.record_success()
                 return result
-            except Exception as exc:
+            except Exception:
                 circuit.record_failure()
-                raise exc
+                raise
 
         return wrapper  # type: ignore[return-value]
 
@@ -170,14 +170,12 @@ async def with_async_retry(
     **kwargs: Any,
 ) -> Any:
     """Async retry helper with exponential backoff."""
-    attempt = 0
     last_exception: Exception | None = None
 
-    while attempt < max_attempts:
+    for attempt in range(1, max_attempts + 1):
         try:
             return await func(*args, **kwargs)
         except Exception as e:
-            attempt += 1
             last_exception = e
             if attempt >= max_attempts:
                 logger.error(
@@ -199,6 +197,5 @@ async def with_async_retry(
             )
             await asyncio.sleep(delay)
 
-    if last_exception:
-        raise last_exception
-    raise RuntimeError("Retry logic failed unexpectedly")
+    # This should never be reached, but satisfies type checker
+    raise last_exception or RuntimeError("Retry logic failed unexpectedly")

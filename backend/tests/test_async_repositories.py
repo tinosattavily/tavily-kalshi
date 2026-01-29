@@ -140,8 +140,12 @@ async def test_upsert_event_async_missing_slug():
         "title": "Test Event",
     }
 
-    with pytest.raises(ValueError, match="slug is required"):
-        await upsert_event_async(event_doc)
+    with patch("app.db.async_repositories.events_collection_async") as mock_collection:
+        mock_coll = AsyncMock()
+        mock_collection.return_value = mock_coll
+
+        with pytest.raises(ValueError, match="slug is required"):
+            await upsert_event_async(event_doc)
 
 
 @pytest.mark.anyio(backend="asyncio")
@@ -260,13 +264,13 @@ async def test_get_run_async_not_found():
 
 @pytest.mark.anyio(backend="asyncio")
 async def test_get_run_async_invalid_id():
-    """Test get_run_async with invalid ID."""
+    """Test get_run_async with invalid ID throws exception."""
     with patch("app.db.async_repositories.runs_collection_async") as mock_collection:
         mock_coll = AsyncMock()
         mock_coll.find_one = AsyncMock(side_effect=Exception("Invalid ObjectId"))
         mock_collection.return_value = mock_coll
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(Exception, match="Invalid ObjectId"):
             await get_run_async("invalid-id")
 
 
@@ -345,11 +349,7 @@ async def test_list_runs_by_market_async_empty():
 
 @pytest.mark.anyio(backend="asyncio")
 async def test_list_runs_by_market_async_invalid_id():
-    """Test list_runs_by_market_async with invalid market_id."""
-    with patch("app.db.async_repositories.runs_collection_async") as mock_collection:
-        mock_coll = AsyncMock()
-        mock_coll.find = MagicMock(side_effect=Exception("Invalid ObjectId"))
-        mock_collection.return_value = mock_coll
-
-        with pytest.raises(RuntimeError):
-            await list_runs_by_market_async("invalid-id")
+    """Test list_runs_by_market_async with invalid market_id raises ValueError."""
+    # Invalid ObjectId validation happens before database call
+    with pytest.raises(ValueError, match="must be a valid ObjectId"):
+        await list_runs_by_market_async("invalid-id")

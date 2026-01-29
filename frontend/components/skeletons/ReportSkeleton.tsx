@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export function ReportSkeleton() {
+export function ReportSkeleton(): React.JSX.Element {
   return (
     <section className="mb-6 rounded-3xl border border-slate-100/50 bg-slate-50/40 backdrop-blur-xl p-8 shadow-[0_16px_40px_rgba(100,116,139,0.2)] animate-pulse">
       {/* Header */}
@@ -56,4 +56,3 @@ export function ReportSkeleton() {
     </section>
   );
 }
-

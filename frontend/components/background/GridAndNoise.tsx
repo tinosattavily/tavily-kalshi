@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function GridAndNoise() {
+export default function GridAndNoise(): React.JSX.Element {
   return (
     <>
       <div className="pointer-events-none absolute inset-0 -z-10 bg-grid opacity-40" />
@@ -8,5 +8,3 @@ export default function GridAndNoise() {
     </>
   );
 }
-
-

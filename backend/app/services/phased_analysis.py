@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.agents.graph import run_analysis_graph
 from app.agents.state import AgentState
 from app.core.logging_config import get_logger
 from app.schemas import AnalyzeRequest
 from app.services.run_snapshot import (
     persist_run_snapshot_async,
+    serialize_signal,
     update_run_phase_async,
     update_run_with_event_and_market_async,
 )
@@ -15,12 +18,24 @@ from app.services.run_snapshot import (
 logger = get_logger(__name__)
 
 
+def _build_config(config: Any) -> dict[str, Any]:
+    """Build configuration dictionary with defaults."""
+    if not config:
+        return {}
+    return {
+        "use_tavily_prompt_agent": getattr(config, "use_tavily_prompt_agent", True),
+        "use_news_summary_agent": getattr(config, "use_news_summary_agent", True),
+        "max_articles": getattr(config, "max_articles", 15),
+        "max_articles_per_query": getattr(config, "max_articles_per_query", 8),
+        "min_confidence": getattr(config, "min_confidence", "medium"),
+        "enable_sentiment_analysis": getattr(config, "enable_sentiment_analysis", True),
+    }
+
+
 async def run_analysis_for_run_id(run_id: str, req: AnalyzeRequest) -> None:
     """Run the analysis graph in phases, updating the run document as each phase completes."""
     try:
-        # Initialize state
         config = req.configuration
-        # Merge config min_confidence into strategy_params if provided
         strategy_params = req.strategy_params or {}
         if config and config.min_confidence:
             strategy_params = {**strategy_params, "min_confidence": config.min_confidence}
@@ -33,17 +48,7 @@ async def run_analysis_for_run_id(run_id: str, req: AnalyzeRequest) -> None:
             "horizon": req.horizon or "24h",
             "strategy_preset": req.strategy_preset or "Balanced",
             "strategy_params": strategy_params,
-            # Configuration options
-            "config": {
-                "use_tavily_prompt_agent": config.use_tavily_prompt_agent if config else True,
-                "use_news_summary_agent": config.use_news_summary_agent if config else True,
-                "max_articles": config.max_articles if config else 15,
-                "max_articles_per_query": config.max_articles_per_query if config else 8,
-                "min_confidence": config.min_confidence if config else "medium",
-                "enable_sentiment_analysis": config.enable_sentiment_analysis if config else True,
-            }
-            if config
-            else {},
+            "config": _build_config(config),
         }
 
         logger.info("Starting phased analysis with LangGraph", run_id=run_id)
@@ -139,16 +144,7 @@ async def run_analysis_for_run_id(run_id: str, req: AnalyzeRequest) -> None:
 
         logger.debug("Phase 2 (News) completed", run_id=run_id)
 
-        # Serialize signal if it's a Pydantic model
-        signal_raw = state.get("signal", {})
-        if hasattr(signal_raw, "model_dump"):
-            signal = signal_raw.model_dump()
-        elif hasattr(signal_raw, "dict"):
-            signal = signal_raw.dict()
-        elif isinstance(signal_raw, dict):
-            signal = signal_raw
-        else:
-            signal = {}
+        signal = serialize_signal(state.get("signal", {}))
 
         # Update run with signal, decision, and report (graph has already run these agents)
         try:

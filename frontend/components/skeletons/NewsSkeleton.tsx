@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export function NewsSkeleton() {
+export function NewsSkeleton(): React.JSX.Element {
   return (
     <div className="relative">
       {/* Tab header skeleton */}
@@ -37,4 +37,3 @@ export function NewsSkeleton() {
     </div>
   );
 }
-

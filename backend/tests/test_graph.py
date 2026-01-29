@@ -6,8 +6,16 @@ from unittest.mock import patch
 
 import pytest
 
-from app.agents.graph import run_analysis_graph
+from app.agents.graph import reset_analysis_graph, run_analysis_graph
 from app.agents.state import AgentState
+
+
+@pytest.fixture(autouse=True)
+def reset_graph_singleton():
+    """Reset the graph singleton before each test to ensure fresh compilation with mocks."""
+    reset_analysis_graph()
+    yield
+    reset_analysis_graph()
 
 
 @pytest.mark.anyio(backend="asyncio")
@@ -226,7 +234,7 @@ async def test_run_analysis_graph_error_propagation():
     with patch("app.agents.graph.run_market_agent") as mock_market:
         mock_market.side_effect = Exception("Market agent error")
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(Exception, match="Market agent error"):
             await run_analysis_graph(initial_state)
 
 

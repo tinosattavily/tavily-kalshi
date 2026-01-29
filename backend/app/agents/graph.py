@@ -21,120 +21,86 @@ from app.core.logging_config import get_logger
 logger = get_logger(__name__)
 
 
-# Node wrapper functions for LangGraph
-async def market_agent_node(state: AgentState) -> AgentState:
-    """Market agent node."""
-    return await run_market_agent(state)
-
-
-async def event_agent_node(state: AgentState) -> AgentState:
-    """Event agent node."""
-    return await run_event_agent(state)
-
-
 async def tavily_prompt_agent_node(state: AgentState) -> AgentState:
-    """Tavily prompt agent node (optional)."""
+    """Execute tavily prompt agent if enabled in configuration."""
     config = state.get("config", {})
-    if config.get("use_tavily_prompt_agent", True):
-        return await run_tavily_prompt_agent(state)
-    # Skip if disabled - just return state unchanged
-    logger.debug("Tavily prompt agent skipped (disabled in configuration)")
-    return state
+    if not config.get("use_tavily_prompt_agent", True):
+        logger.debug("Tavily prompt agent skipped (disabled in configuration)")
+        return state
+    return await run_tavily_prompt_agent(state)
 
 
 async def news_agent_node(state: AgentState) -> AgentState:
-    """News agent node."""
-    logger.info("Executing news_agent node in LangGraph", run_id=state.get("run_id"))
+    """Execute news agent with logging for article collection."""
+    run_id = state.get("run_id")
+    logger.info("Executing news_agent node in LangGraph", run_id=run_id)
+
     result = await run_news_agent(state)
+
+    news_context = result.get("news_context", {})
+    articles = news_context.get("articles", []) if news_context else []
     logger.info(
         "news_agent node completed",
-        run_id=state.get("run_id"),
-        has_news_context=bool(result.get("news_context")),
-        articles_count=len(result.get("news_context", {}).get("articles", [])) if result.get("news_context") else 0,
+        run_id=run_id,
+        has_news_context=bool(news_context),
+        articles_count=len(articles),
     )
     return result
 
 
 async def news_summary_agent_node(state: AgentState) -> AgentState:
-    """News summary agent node (optional)."""
+    """Execute news summary agent if enabled in configuration."""
     config = state.get("config", {})
-    if config.get("use_news_summary_agent", True):
-        return await run_news_summary_agent(state)
-    # Skip if disabled - just return state unchanged
-    logger.debug("News summary agent skipped (disabled in configuration)")
-    return state
-
-
-async def probability_agent_node(state: AgentState) -> AgentState:
-    """Probability agent node."""
-    return await run_prob_agent(state)
-
-
-async def strategy_agent_node(state: AgentState) -> AgentState:
-    """Strategy agent node."""
-    return await run_strategy_agent(state)
-
-
-async def report_agent_node(state: AgentState) -> AgentState:
-    """Report agent node."""
-    return await run_report_agent(state)
+    if not config.get("use_news_summary_agent", True):
+        logger.debug("News summary agent skipped (disabled in configuration)")
+        return state
+    return await run_news_summary_agent(state)
 
 
 def route_after_market(state: AgentState) -> str:
-    """Route after market agent: check if market selection is required.
-
-    Returns:
-        "end" if market selection is required, "event_agent" otherwise.
-    """
-    if state.get("requires_market_selection"):
-        return "end"
-    return "event_agent"
+    """Determine routing after market agent based on market selection state."""
+    return "end" if state.get("requires_market_selection") else "event_agent"
 
 
 def build_analysis_graph() -> StateGraph:
-    """Build the LangGraph StateGraph representing the agent workflow.
+    """Build and compile the LangGraph StateGraph for the agent workflow.
 
     Execution flow:
-    1. market_agent (with conditional routing for market selection)
-    2. event_agent
-    3. tavily_prompt_agent (optional, can be skipped)
-    4. news_agent
-    5. news_summary_agent (optional, can be skipped)
-    6. probability_agent
-    7. strategy_agent
-    8. report_agent
+    1. market_agent - Extract market data (may require user selection for multi-market events)
+    2. event_agent - Build event context
+    3. tavily_prompt_agent - Generate search queries (optional)
+    4. news_agent - Fetch news articles
+    5. news_summary_agent - Summarize news (optional)
+    6. probability_agent - Calculate probability estimates
+    7. strategy_agent - Determine trading strategy
+    8. report_agent - Generate final report
 
     Returns:
         Compiled StateGraph ready for execution.
     """
-    # Create the graph builder
     builder = StateGraph(AgentState)
 
-    # Add all agent nodes
-    builder.add_node("market_agent", market_agent_node)
-    builder.add_node("event_agent", event_agent_node)
+    # Register agent nodes - simple pass-through wrappers use the agent function directly
+    builder.add_node("market_agent", run_market_agent)
+    builder.add_node("event_agent", run_event_agent)
     builder.add_node("tavily_prompt_agent", tavily_prompt_agent_node)
     builder.add_node("news_agent", news_agent_node)
     builder.add_node("news_summary_agent", news_summary_agent_node)
-    builder.add_node("probability_agent", probability_agent_node)
-    builder.add_node("strategy_agent", strategy_agent_node)
-    builder.add_node("report_agent", report_agent_node)
+    builder.add_node("probability_agent", run_prob_agent)
+    builder.add_node("strategy_agent", run_strategy_agent)
+    builder.add_node("report_agent", run_report_agent)
 
-    # Wire the graph: START → market_agent
+    # Entry point
     builder.add_edge(START, "market_agent")
 
-    # Conditional edge: market_agent → (event_agent | END)
-    # If requires_market_selection is True, stop and let UI handle selection
+    # Conditional routing: stop for market selection or continue to event_agent
     builder.add_conditional_edges(
         "market_agent",
         route_after_market,
-        {
-            "event_agent": "event_agent",
-            "end": END,
-        },
+        {"event_agent": "event_agent", "end": END},
     )
 
-    # Linear chain from event_agent to report_agent
+    # Linear pipeline from event_agent through report_agent
     builder.add_edge("event_agent", "tavily_prompt_agent")
     builder.add_edge("tavily_prompt_agent", "news_agent")
     builder.add_edge("news_agent", "news_summary_agent")
@@ -143,37 +109,36 @@ def build_analysis_graph() -> StateGraph:
     builder.add_edge("strategy_agent", "report_agent")
     builder.add_edge("report_agent", END)
 
-    # Compile the graph
     return builder.compile()
 
 
-# Global compiled graph instance (lazy-loaded)
 _analysis_graph: StateGraph | None = None
 
 
 def get_analysis_graph() -> StateGraph:
-    """Get or create the compiled analysis graph."""
+    """Get or create the compiled analysis graph (lazy-loaded singleton)."""
     global _analysis_graph
     if _analysis_graph is None:
         _analysis_graph = build_analysis_graph()
     return _analysis_graph
 
 
+def reset_analysis_graph() -> None:
+    """Reset the cached graph singleton. Used for testing to allow fresh graph compilation."""
+    global _analysis_graph
+    _analysis_graph = None
+
+
+def _format_utc_timestamp() -> str:
+    """Generate an ISO 8601 UTC timestamp without microseconds."""
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 async def run_analysis_graph(initial_state: AgentState) -> AgentState:
-    """Run the multi-agent analysis graph using LangGraph.
+    """Run the multi-agent analysis graph and return the final state.
 
-    This function maintains backward compatibility with the previous implementation.
-    It initializes the state, runs the LangGraph, and returns the final state.
-
-    Execution flow:
-    1. market_agent (sequential - must run first)
-    2. event_agent (sequential - depends on market_agent)
-    3. tavily_prompt_agent (sequential - depends on event_agent, optional)
-    4. news_agent (sequential - depends on tavily_prompt_agent)
-    5. news_summary_agent (sequential - depends on news_agent, optional)
-    6. prob_agent (sequential - depends on news_summary_agent)
-    7. strategy_agent (sequential - depends on prob_agent)
-    8. report_agent (sequential - depends on strategy_agent)
+    Initializes state with defaults (run_id, run_at, market_url) and executes
+    the full agent pipeline. See build_analysis_graph for execution flow details.
 
     Args:
         initial_state: Initial agent state dictionary.
@@ -181,21 +146,16 @@ async def run_analysis_graph(initial_state: AgentState) -> AgentState:
     Returns:
         Final agent state after graph execution.
     """
-    # Initialize state with defaults (same as before)
     run_id = f"run-{uuid4().hex}"
+
     state: AgentState = dict(initial_state)
     state.setdefault("run_id", run_id)
-    state.setdefault(
-        "run_at",
-        datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-    )
+    state.setdefault("run_at", _format_utc_timestamp())
     state.setdefault("market_url", state.get("polymarket_url", "https://polymarket.com"))
 
     logger.info("Starting analysis graph", run_id=run_id, market_url=state.get("market_url"))
 
-    # Get the compiled graph and run it
-    graph = get_analysis_graph()
-    result_state = await graph.ainvoke(state)
+    result_state = await get_analysis_graph().ainvoke(state)
 
     logger.info("Analysis graph completed", run_id=run_id)
     return result_state

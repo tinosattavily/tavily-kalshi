@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
+
 import clsx from "clsx";
 
-type Signal = {
-  // New comprehensive signal fields
+interface Signal {
   market_prob?: number;
   model_prob?: number;
   edge_pct?: number;
@@ -20,59 +20,61 @@ type Signal = {
   horizon?: string;
   rationale_short?: string;
   rationale_long?: string;
-  // Legacy fields for backward compatibility
   direction?: string;
   model_prob_abs?: number;
   confidence?: string;
   rationale?: string;
-};
+}
 
 type ConfidenceLevel = "LOW" | "MEDIUM" | "HIGH";
 type RecommendedAction = "buy_yes" | "buy_no" | "reduce_yes" | "reduce_no" | "hold";
+
+interface ColorScheme {
+  bgColor: string;
+  borderColor: string;
+  shadowColor: string;
+  textColor: string;
+}
 
 function formatPct(x: number | null | undefined, digits = 2): string {
   if (x === null || x === undefined || Number.isNaN(x)) return "–";
   return `${(x * 100).toFixed(digits)}%`;
 }
 
-function actionLabel(action: RecommendedAction | string): string {
-  const normalized = action.toLowerCase();
-  switch (normalized) {
-    case "buy_yes": return "BUY YES";
-    case "buy_no": return "BUY NO";
-    case "reduce_yes": return "REDUCE YES";
-    case "reduce_no": return "REDUCE NO";
-    case "hold": return "HOLD";
-    default: return "HOLD";
-  }
+function getActionLabel(action: RecommendedAction | string): string {
+  const labels: Record<string, string> = {
+    buy_yes: "BUY YES",
+    buy_no: "BUY NO",
+    reduce_yes: "REDUCE YES",
+    reduce_no: "REDUCE NO",
+    hold: "HOLD",
+  };
+  return labels[action.toLowerCase()] || "HOLD";
 }
 
-function actionClasses(action: RecommendedAction | string): string {
+function getActionClasses(action: RecommendedAction | string): string {
   const normalized = action.toLowerCase();
   if (normalized === "buy_yes") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-emerald-200 bg-emerald-50 text-emerald-900";
   }
   if (normalized === "buy_no" || normalized === "reduce_yes") {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "border-rose-200 bg-rose-50 text-rose-900";
   }
   if (normalized === "reduce_no") {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
-  // hold
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
-function confidenceClasses(level: string): string {
+function getConfidenceClasses(level: string): string {
   const normalized = level.toUpperCase();
-  switch (normalized) {
-    case "HIGH":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    case "MEDIUM":
-      return "bg-indigo-50 text-indigo-700 border-indigo-200";
-    case "LOW":
-    default:
-      return "bg-amber-50 text-amber-700 border-amber-200";
+  if (normalized === "HIGH") {
+    return "bg-[#1e3a8a]/20 text-[#1e3a8a] border-[#1e3a8a]/40";
   }
+  if (normalized === "MEDIUM") {
+    return "bg-[#1e3a8a]/10 text-[#1e3a8a] border-[#1e3a8a]/30";
+  }
+  return "bg-[#1e3a8a]/5 text-[#1e3a8a]/70 border-[#1e3a8a]/20";
 }
 
 function normalizeConfidenceLevel(level: string | undefined): ConfidenceLevel {
@@ -84,59 +86,63 @@ function normalizeConfidenceLevel(level: string | undefined): ConfidenceLevel {
   return "LOW";
 }
 
-function getDecisionColorScheme(action: RecommendedAction | string): {
-  bgColor: string;
-  borderColor: string;
-  shadowColor: string;
-  textColor: string;
-} {
+function getColorScheme(action: RecommendedAction | string): ColorScheme {
   const normalized = action.toLowerCase();
-  
+
   if (normalized === "buy_yes") {
-    // Buy YES - Green
     return {
       bgColor: "bg-emerald-50/40",
       borderColor: "border-emerald-100/50",
-      shadowColor: "rgba(16, 185, 129, 0.2)", // emerald-500 with opacity
-      textColor: "text-emerald-700",
+      shadowColor: "rgba(16, 185, 129, 0.2)",
+      textColor: "text-emerald-900",
     };
-  } else if (normalized === "buy_no" || normalized === "reduce_yes") {
-    // Buy NO or Reduce YES - Red
+  }
+
+  if (normalized === "buy_no" || normalized === "reduce_yes") {
     return {
       bgColor: "bg-rose-50/40",
       borderColor: "border-rose-100/50",
-      shadowColor: "rgba(244, 63, 94, 0.2)", // rose-500 with opacity
-      textColor: "text-rose-700",
+      shadowColor: "rgba(244, 63, 94, 0.2)",
+      textColor: "text-rose-900",
     };
-  } else if (normalized === "reduce_no") {
-    // Reduce NO - Amber
+  }
+
+  if (normalized === "reduce_no") {
     return {
       bgColor: "bg-amber-50/40",
       borderColor: "border-amber-100/50",
-      shadowColor: "rgba(245, 158, 11, 0.2)", // amber-500 with opacity
+      shadowColor: "rgba(245, 158, 11, 0.2)",
       textColor: "text-amber-700",
     };
-  } else {
-    // Hold - Grey
-    return {
-      bgColor: "bg-slate-50/40",
-      borderColor: "border-slate-100/50",
-      shadowColor: "rgba(100, 116, 139, 0.2)", // slate-500 with opacity
-      textColor: "text-slate-700",
-    };
   }
+
+  return {
+    bgColor: "bg-slate-50/40",
+    borderColor: "border-slate-100/50",
+    shadowColor: "rgba(100, 116, 139, 0.2)",
+    textColor: "text-slate-700",
+  };
 }
 
-export default function SignalCard({ signal }: { signal: Signal }) {
+interface SignalCardProps {
+  signal: Signal;
+}
+
+export default function SignalCard({ signal }: SignalCardProps): React.JSX.Element | null {
   if (!signal || Object.keys(signal).length === 0) return null;
-  
-  // Extract and normalize values
+
   const marketProb = signal.market_prob ?? signal.model_prob_abs ?? 0;
   const modelProb = signal.model_prob ?? signal.model_prob_abs ?? 0;
-  const edge = signal.edge_pct ?? 
-    (signal.model_prob !== undefined && signal.market_prob !== undefined 
-      ? signal.model_prob - signal.market_prob 
-      : 0);
+
+  const calculateEdge = (): number => {
+    if (signal.edge_pct !== undefined) return signal.edge_pct;
+    if (signal.model_prob !== undefined && signal.market_prob !== undefined) {
+      return signal.model_prob - signal.market_prob;
+    }
+    return 0;
+  };
+
+  const edge = calculateEdge();
   const kellyYes = signal.kelly_fraction_yes ?? 0;
   const confidenceLevel = normalizeConfidenceLevel(signal.confidence_level ?? signal.confidence);
   const confidenceScore = signal.confidence_score ?? 0.5;
@@ -144,7 +150,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
   const stopLoss = signal.target_stop_loss_prob;
   const recommendedAction = (signal.recommended_action ?? "hold").toLowerCase() as RecommendedAction;
   const rationale = signal.rationale_short ?? signal.rationale_long ?? signal.rationale;
-  const colorScheme = getDecisionColorScheme(recommendedAction);
+  const colorScheme = getColorScheme(recommendedAction);
 
   return (
     <section 
@@ -177,10 +183,10 @@ export default function SignalCard({ signal }: { signal: Signal }) {
           className={clsx(
             "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide",
             "shadow-[0_0_0_1px_rgba(15,23,42,0.02)]",
-            actionClasses(recommendedAction)
+            getActionClasses(recommendedAction)
           )}
         >
-          {actionLabel(recommendedAction)}
+          {getActionLabel(recommendedAction)}
         </span>
       </div>
 
@@ -236,7 +242,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
           </p>
           <p className={clsx(
             "mt-1 text-lg md:text-xl font-semibold",
-            edge >= 0 ? "text-emerald-700" : "text-rose-700"
+            edge >= 0 ? "text-emerald-900" : "text-rose-900"
           )}>
             {formatPct(edge)}
           </p>
@@ -295,7 +301,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
                 <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
                   Position Size
                 </p>
-                <p className="mt-1 text-lg md:text-xl font-semibold text-emerald-700">
+                <p className="mt-1 text-lg md:text-xl font-semibold text-emerald-900">
                   {formatPct(signal.recommended_size_fraction)}
                 </p>
                 <p className="mt-0.5 text-[11px] text-slate-500">
@@ -323,7 +329,7 @@ export default function SignalCard({ signal }: { signal: Signal }) {
           <span
             className={clsx(
               "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
-              confidenceClasses(confidenceLevel)
+              getConfidenceClasses(confidenceLevel)
             )}
           >
             <span className="mr-1 inline-block h-2 w-2 rounded-full bg-current" />

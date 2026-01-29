@@ -76,52 +76,61 @@ class RedisCache:
         self.ttl = ttl_seconds
         self._client: redis.Redis | None = None
         self._connected = False
+        self._fallback_cache = TTLCache(ttl_seconds=ttl_seconds)
 
-        # Use URL if provided, otherwise use individual parameters
+        self._connect(redis_url, redis_host, redis_port, redis_db, redis_password)
+
+    def _connect(
+        self,
+        redis_url: str | None,
+        redis_host: str | None,
+        redis_port: int | None,
+        redis_db: int | None,
+        redis_password: str | None,
+    ) -> None:
+        """Attempt to connect to Redis using URL or host/port configuration."""
         if redis_url:
-            try:
-                self._client = redis.from_url(
-                    redis_url,
-                    decode_responses=False,  # We'll handle serialization ourselves
-                    socket_connect_timeout=5,
-                    socket_timeout=5,
-                )
-                # Test connection
-                self._client.ping()
-                self._connected = True
-                url_display = redis_url.split("@")[-1] if "@" in redis_url else "***"
-                logger.info("Redis cache connected via URL", url=url_display)
-            except (ConnectionError, RedisError) as e:
-                logger.warning(
-                    "Failed to connect to Redis, falling back to in-memory cache",
-                    error=str(e),
-                )
-                self._client = None
+            self._connect_via_url(redis_url)
         elif redis_host:
-            try:
-                self._client = redis.Redis(
-                    host=redis_host,
-                    port=redis_port or 6379,
-                    db=redis_db or 0,
-                    password=redis_password,
-                    decode_responses=False,
-                    socket_connect_timeout=5,
-                    socket_timeout=5,
-                )
-                # Test connection
-                self._client.ping()
-                self._connected = True
-                logger.info("Redis cache connected", host=redis_host, port=redis_port or 6379)
-            except (ConnectionError, RedisError) as e:
-                logger.warning(
-                    "Failed to connect to Redis, falling back to in-memory cache",
-                    error=str(e),
-                )
-                self._client = None
+            self._connect_via_host(redis_host, redis_port or 6379, redis_db or 0, redis_password)
 
-        # Fallback to in-memory cache if Redis not available
-        if not self._connected:
-            self._fallback_cache = TTLCache(ttl_seconds=ttl_seconds)
+    def _connect_via_url(self, redis_url: str) -> None:
+        """Connect to Redis using a URL."""
+        try:
+            self._client = redis.from_url(
+                redis_url,
+                decode_responses=False,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+            )
+            self._client.ping()
+            self._connected = True
+            url_display = redis_url.split("@")[-1] if "@" in redis_url else "***"
+            logger.info("Redis cache connected via URL", url=url_display)
+        except (ConnectionError, RedisError) as e:
+            logger.warning("Failed to connect to Redis via URL", error=str(e))
+            self._client = None
+
+    def _connect_via_host(
+        self, host: str, port: int, db: int, password: str | None
+    ) -> None:
+        """Connect to Redis using host/port configuration."""
+        try:
+            self._client = redis.Redis(
+                host=host,
+                port=port,
+                db=db,
+                password=password,
+                decode_responses=False,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+            )
+            self._client.ping()
+            self._connected = True
+            logger.info("Redis cache connected", host=host, port=port)
+        except (ConnectionError, RedisError) as e:
+            logger.warning("Failed to connect to Redis via host", error=str(e))
+            self._client = None
 
     def _serialize(self, value: Any) -> bytes:
         """Serialize value to bytes for Redis storage."""
@@ -139,6 +148,14 @@ class RedisCache:
             logger.warning("Failed to deserialize value from cache", error=str(e))
             return None
 
+    def _use_fallback(self, operation: str, key: str | None = None, error: str | None = None) -> None:
+        """Mark Redis as disconnected and log the fallback."""
+        self._connected = False
+        log_kwargs: dict[str, Any] = {"error": error} if error else {}
+        if key:
+            log_kwargs["key"] = key[:50]
+        logger.warning(f"Redis {operation} failed, using fallback", **log_kwargs)
+
     def get(self, key: str) -> Any | None:
         """Get value from cache if not expired."""
         if not self._connected or not self._client:
@@ -150,14 +167,7 @@ class RedisCache:
                 return None
             return self._deserialize(value)
         except (ConnectionError, RedisError) as e:
-            logger.warning(
-                "Redis get failed, falling back to in-memory",
-                error=str(e),
-                key=key[:50],
-            )
-            self._connected = False
-            if not hasattr(self, "_fallback_cache"):
-                self._fallback_cache = TTLCache(ttl_seconds=self.ttl)
+            self._use_fallback("get", key=key, error=str(e))
             return self._fallback_cache.get(key)
 
     def set(self, key: str, value: Any) -> None:
@@ -170,14 +180,7 @@ class RedisCache:
             serialized = self._serialize(value)
             self._client.setex(key, self.ttl, serialized)
         except (ConnectionError, RedisError) as e:
-            logger.warning(
-                "Redis set failed, falling back to in-memory",
-                error=str(e),
-                key=key[:50],
-            )
-            self._connected = False
-            if not hasattr(self, "_fallback_cache"):
-                self._fallback_cache = TTLCache(ttl_seconds=self.ttl)
+            self._use_fallback("set", key=key, error=str(e))
             self._fallback_cache.set(key, value)
 
     def clear(self) -> None:
@@ -187,43 +190,38 @@ class RedisCache:
             return
 
         try:
-            # Note: This clears the entire Redis database, use with caution
-            # In production, consider using key prefixes and clearing by pattern
             self._client.flushdb()
         except (ConnectionError, RedisError) as e:
-            logger.warning("Redis clear failed", error=str(e))
-            if not hasattr(self, "_fallback_cache"):
-                self._fallback_cache = TTLCache(ttl_seconds=self.ttl)
+            self._use_fallback("clear", error=str(e))
             self._fallback_cache.clear()
 
     def cleanup_expired(self) -> int:
-        """Redis handles expiration automatically, but we can check for expired keys."""
+        """Redis handles expiration automatically."""
         if not self._connected or not self._client:
             return self._fallback_cache.cleanup_expired()
-
-        # Redis handles TTL automatically, so this is mostly a no-op
-        # But we can return 0 to indicate no manual cleanup needed
         return 0
 
 
 def _create_cache(ttl_seconds: int, cache_name: str) -> TTLCache | RedisCache:
     """Create cache instance based on configuration."""
-    if settings.use_redis_cache and REDIS_AVAILABLE:
-        return RedisCache(
-            ttl_seconds=ttl_seconds,
-            redis_url=settings.redis_url,
-            redis_host=settings.redis_host,
-            redis_port=settings.redis_port,
-            redis_db=settings.redis_db,
-            redis_password=settings.redis_password,
-        )
-    else:
-        if settings.use_redis_cache:
-            logger.warning(
-                "Redis cache requested but not available, using in-memory cache",
-                cache_name=cache_name,
-            )
+    if not settings.use_redis_cache:
         return TTLCache(ttl_seconds=ttl_seconds)
+
+    if not REDIS_AVAILABLE:
+        logger.warning(
+            "Redis cache requested but not available, using in-memory cache",
+            cache_name=cache_name,
+        )
+        return TTLCache(ttl_seconds=ttl_seconds)
+
+    return RedisCache(
+        ttl_seconds=ttl_seconds,
+        redis_url=settings.redis_url,
+        redis_host=settings.redis_host,
+        redis_port=settings.redis_port,
+        redis_db=settings.redis_db,
+        redis_password=settings.redis_password,
+    )
 
 
 # Global caches - use Redis if configured, otherwise in-memory

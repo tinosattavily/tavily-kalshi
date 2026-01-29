@@ -3,142 +3,125 @@
 from __future__ import annotations
 
 from typing import List, Optional
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.core.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
+def _extract_source_from_url(url: str) -> str:
+    """Extract source domain from URL."""
+    if not url:
+        return "Unknown source"
+    try:
+        parsed = urlparse(url)
+        return parsed.netloc.replace("www.", "") or "Unknown source"
+    except Exception:
+        return "Unknown source"
+
+
+def _create_snippet(content: str | None, max_length: int = 240) -> str | None:
+    """Create a truncated snippet from content."""
+    if not content:
+        return None
+    if len(content) <= max_length:
+        return content
+    return content[:max_length] + "..."
 
 
 class TavilyRawArticle(BaseModel):
-    """Raw article structure from Tavily API response.
-
-    Based on Tavily API documentation, the response includes:
-    - title: Article title
-    - url: Article URL
-    - content: Full article content
-    - score: Relevance score (0-1)
-    - published_date: Publication date (ISO format or string)
-    - source: Source domain/website name
-    - image: Optional image URL
-    """
+    """Raw article structure from Tavily API response."""
 
     title: str
     url: str
     content: Optional[str] = None
-    score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Relevance score")
+    score: Optional[float] = Field(None, ge=0.0, le=1.0)
     published_date: Optional[str] = None
-    published_at: Optional[str] = None  # Alternative field name
+    published_at: Optional[str] = None
     source: Optional[str] = None
     image: Optional[str] = None
-
-    @field_validator("published_date", "published_at", mode="before")
-    @classmethod
-    def parse_published_date(cls, v: str | None) -> str | None:
-        """Parse published date - Tavily may return various formats."""
-        if not v:
-            return None
-        # Return as-is, let the consumer handle parsing
-        return str(v) if v else None
 
 
 class TavilySearchResponse(BaseModel):
     """Complete Tavily API search response."""
 
     query: Optional[str] = None
-    answer: Optional[str] = Field(None, description="AI-generated answer summary")
+    answer: Optional[str] = None
     results: List[TavilyRawArticle] = Field(default_factory=list)
     response_time: Optional[float] = None
-    images: Optional[List[str]] = Field(None, description="Related images")
+    images: Optional[List[str]] = None
 
-    class Config:
-        extra = "allow"  # Allow extra fields from API that we don't model
+    model_config = ConfigDict(extra="allow")
 
 
 class TavilyArticle(BaseModel):
-    """Processed/normalized article for internal use.
-
-    This is the cleaned version that we use throughout the application.
-    """
+    """Processed/normalized article for internal use."""
 
     title: str
     url: str
-    source: str = Field(..., description="Source domain or publication name")
-    published_at: Optional[str] = Field(None, description="ISO format date string")
-    snippet: Optional[str] = Field(None, description="Truncated content preview")
-    content: Optional[str] = Field(None, description="Full content if available")
-    score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Relevance score from Tavily")
+    source: str
+    published_at: Optional[str] = None
+    snippet: Optional[str] = None
+    content: Optional[str] = None
+    score: Optional[float] = Field(None, ge=0.0, le=1.0)
     image: Optional[str] = None
-    sentiment: Optional[str] = Field(None, description="bullish, bearish, or neutral")
+    sentiment: Optional[str] = None
 
     @classmethod
-    def from_tavily_raw(cls, raw: TavilyRawArticle, snippet_length: int = 240) -> "TavilyArticle":
-        """Create TavilyArticle from raw Tavily response.
-
-        Args:
-            raw: Raw article from Tavily API
-            snippet_length: Maximum length for snippet
-
-        Returns:
-            Normalized TavilyArticle
-        """
-        # Extract source from URL if not provided
-        source = raw.source
-        if not source and raw.url:
-            try:
-                from urllib.parse import urlparse
-
-                parsed = urlparse(raw.url)
-                source = parsed.netloc.replace("www.", "")
-            except Exception:
-                source = "Unknown source"
-
-        # Use published_date or published_at
+    def from_tavily_raw(cls, raw: TavilyRawArticle, snippet_length: int = 240) -> TavilyArticle:
+        """Create TavilyArticle from raw Tavily response."""
+        source = raw.source or _extract_source_from_url(raw.url)
         published_at = raw.published_date or raw.published_at
-
-        # Create snippet from content
-        snippet = None
-        if raw.content:
-            snippet = raw.content[:snippet_length]
-            if len(raw.content) > snippet_length:
-                snippet += "..."
 
         return cls(
             title=raw.title,
             url=raw.url,
-            source=source or "Unknown source",
+            source=source,
             published_at=published_at,
-            snippet=snippet,
+            snippet=_create_snippet(raw.content, snippet_length),
             content=raw.content,
             score=raw.score,
             image=raw.image,
-            sentiment=None,  # Will be set by sentiment analysis
+            sentiment=None,
+        )
+
+    @classmethod
+    def from_dict(cls, item: dict, snippet_length: int = 240) -> TavilyArticle:
+        """Create TavilyArticle from a dictionary."""
+        url = item.get("url", "")
+        source = item.get("source") or _extract_source_from_url(url)
+        content = item.get("content") or ""
+
+        return cls(
+            title=item.get("title", "Untitled"),
+            url=url,
+            source=source,
+            published_at=item.get("published_date") or item.get("published_at"),
+            snippet=_create_snippet(content, snippet_length),
+            content=content if content else None,
+            score=item.get("score"),
+            image=item.get("image"),
+            sentiment=None,
         )
 
 
 class TavilySearchResult(BaseModel):
     """Processed Tavily search result for internal use."""
 
-    answer: str = Field(default="", description="AI-generated answer summary")
+    answer: str = Field(default="")
     articles: List[TavilyArticle] = Field(default_factory=list)
     query: Optional[str] = None
     response_time: Optional[float] = None
 
     @classmethod
-    def from_api_response(cls, api_response: dict) -> "TavilySearchResult":
-        """Create TavilySearchResult from raw API response.
-
-        Args:
-            api_response: Raw JSON response from Tavily API
-
-        Returns:
-            Processed TavilySearchResult
-        """
+    def from_api_response(cls, api_response: dict) -> TavilySearchResult:
+        """Create TavilySearchResult from raw API response."""
         try:
-            # Try to parse with Pydantic model first
             parsed = TavilySearchResponse.model_validate(api_response)
-
-            # Convert raw articles to processed articles
-            articles = [
-                TavilyArticle.from_tavily_raw(raw_article) for raw_article in parsed.results
-            ]
+            articles = [TavilyArticle.from_tavily_raw(raw) for raw in parsed.results]
 
             return cls(
                 answer=parsed.answer or "",
@@ -147,56 +130,26 @@ class TavilySearchResult(BaseModel):
                 response_time=parsed.response_time,
             )
         except Exception as e:
-            # Fallback: manual parsing if Pydantic validation fails
-            from app.core.logging_config import get_logger
-
-            logger = get_logger(__name__)
             logger.warning(
                 "Failed to parse Tavily response with Pydantic, using fallback",
                 error=str(e),
             )
+            return cls._from_api_response_fallback(api_response)
 
-            raw_results = api_response.get("results", [])
-            articles = []
+    @classmethod
+    def _from_api_response_fallback(cls, api_response: dict) -> TavilySearchResult:
+        """Fallback parsing when Pydantic validation fails."""
+        articles = []
+        for item in api_response.get("results", []):
+            try:
+                raw_article = TavilyRawArticle.model_validate(item)
+                articles.append(TavilyArticle.from_tavily_raw(raw_article))
+            except Exception:
+                articles.append(TavilyArticle.from_dict(item))
 
-            for item in raw_results:
-                try:
-                    # Try to create from dict
-                    raw_article = TavilyRawArticle.model_validate(item)
-                    articles.append(TavilyArticle.from_tavily_raw(raw_article))
-                except Exception:
-                    # Fallback: manual extraction
-                    source = item.get("source")
-                    if not source and item.get("url"):
-                        try:
-                            from urllib.parse import urlparse
-
-                            parsed = urlparse(item.get("url", ""))
-                            source = parsed.netloc.replace("www.", "")
-                        except Exception:
-                            source = "Unknown source"
-
-                    content = item.get("content") or ""
-                    snippet = content[:240] if content else None
-                    if snippet and len(content) > 240:
-                        snippet += "..."
-
-                    articles.append(
-                        TavilyArticle(
-                            title=item.get("title", "Untitled"),
-                            url=item.get("url", ""),
-                            source=source or "Unknown source",
-                            published_at=item.get("published_date") or item.get("published_at"),
-                            snippet=snippet,
-                            content=content if content else None,
-                            score=item.get("score"),
-                            image=item.get("image"),
-                        )
-                    )
-
-            return cls(
-                answer=api_response.get("answer", ""),
-                articles=articles,
-                query=api_response.get("query"),
-                response_time=api_response.get("response_time"),
-            )
+        return cls(
+            answer=api_response.get("answer", ""),
+            articles=articles,
+            query=api_response.get("query"),
+            response_time=api_response.get("response_time"),
+        )

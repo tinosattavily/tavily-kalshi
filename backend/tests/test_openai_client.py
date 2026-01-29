@@ -149,7 +149,7 @@ def test_generate_signal_sync_api_error(mock_circuit, mock_cache):
     client.client.chat.completions.create = MagicMock(side_effect=Exception("API Error"))
     mock_circuit.record_failure = MagicMock()
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(Exception, match="API Error"):
         client._generate_signal_sync(
             "Test Event",
             "Test?",
