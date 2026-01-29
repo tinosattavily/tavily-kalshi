@@ -169,7 +169,7 @@ export default function RecentSessions({
           <div className="flex flex-col items-center justify-center py-8">
             <p className="text-sm text-red-600 mb-2">{error}</p>
             <button
-              onClick={fetchRecentRuns}
+              onClick={() => fetchRecentRuns()}
               className="text-xs text-indigo-600 hover:text-indigo-700 underline"
             >
               Try again
