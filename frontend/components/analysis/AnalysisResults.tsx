@@ -214,6 +214,7 @@ function MarketCardSection({
             price: Number(a.price ?? 0),
             size: Number(a.size ?? 0),
           }))}
+          articles={results.news_context?.articles}
         />
       </div>
     );

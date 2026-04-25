@@ -1,15 +1,10 @@
 "use client";
 
-import React from "react";
-import {
-  Activity,
-  Waves,
-  Timer,
-  MessageCircle,
-  ArrowUpRight,
-  Hash,
-  Scale,
-} from "lucide-react";
+import React, { useMemo, useState } from "react";
+import ActivitySparkline from "./ActivitySparkline";
+import MarketPickerChip from "./MarketPickerChip";
+import { articlesToBuckets } from "../../lib/sparkline-buckets";
+import type { NewsArticle } from "../../types/market";
 
 type OrderBookLevel = {
   price: number;
@@ -22,48 +17,42 @@ type PreviousMarketOption = {
   question: string;
 };
 
-type MarketSnapshotProps = {
+export type MarketSnapshotProps = {
   // Event-level
   eventTitle: string;
   venue?: "kalshi" | "polymarket";
-  groupItemTitle?: string; // e.g. "50+ bps decrease"
+  groupItemTitle?: string;
   marketUrl: string;
-  closesIn: string; // preformatted, e.g. "23 days"
-  endDate?: string; // ISO date string for calculating time remaining
+  closesIn: string;
+  endDate?: string;
   // Market-level
   question?: string;
   previousMarkets?: PreviousMarketOption[];
   onMarketSelect?: (marketId: string) => void;
   activeMarketId?: string;
 
-  // Market-level prices (0–1)
   yesPrice: number;
   noPrice: number;
 
-  // Liquidity/volume
-  marketVolume: number; // per-market volume
+  marketVolume: number;
   volume24h?: number;
   liquidity?: number;
 
-  // Social / meta
   commentCount?: number | null;
   eventCommentCount?: number | null;
   seriesCommentCount?: number | null;
 
-  // Order-book snapshot (optional)
   bestBid?: number;
   bestAsk?: number;
   bids?: OrderBookLevel[];
   asks?: OrderBookLevel[];
-};
 
-function formatUsdCompact(value: number | undefined) {
-  if (value == null || Number.isNaN(value)) return "—";
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
-  return value.toFixed(0);
-}
+  // New optional props for live-activity card
+  resolvedOutcome?: "YES" | "NO" | null;
+  tags?: string[];
+  articles?: NewsArticle[];
+  lastRefreshedAt?: number;
+};
 
 const VENUE_META = {
   polymarket: {
@@ -80,433 +69,385 @@ const VENUE_META = {
   },
 } as const;
 
+function fmtNumber(n: number | undefined): string {
+  if (n == null || Number.isNaN(n)) return "0";
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return Math.round(n).toLocaleString();
+}
 
-export function MarketCard(props: MarketSnapshotProps) {
-  const {
-    eventTitle,
-    venue,
-    groupItemTitle,
-    marketUrl,
-    closesIn,
-    endDate,
-    question,
-    previousMarkets = [],
-    onMarketSelect,
-    activeMarketId,
-    yesPrice,
-    noPrice,
-    marketVolume,
-    volume24h,
-    liquidity,
-    commentCount,
-    eventCommentCount,
-    seriesCommentCount,
-    bestBid,
-    bestAsk,
-    bids = [],
-    asks = [],
-  } = props;
-
-  const [isMarketDropdownOpen, setIsMarketDropdownOpen] = React.useState(false);
-
-  // Calculate time remaining and determine color
-  const getCountdownColor = (): string => {
-    if (!endDate) return "text-red-500"; // Default to red if no endDate
-    
-    try {
-      const end = new Date(endDate).getTime();
-      if (Number.isNaN(end)) return "text-red-500";
-      
-      const now = Date.now();
-      const diffMs = Math.max(0, end - now);
-      const diffDays = diffMs / (1000 * 60 * 60 * 24);
-      
-      if (diffDays < 1) {
-        return "text-red-500"; // Less than a day: red
-      } else if (diffDays < 7) {
-        return "text-yellow-500"; // Less than a week but more than a day: yellow
-      } else {
-        return "text-green-500"; // More than a week: green
-      }
-    } catch {
-      return "text-red-500";
-    }
-  };
-
-  const countdownColor = getCountdownColor();
-
-  const yesPct = yesPrice * 100;
-  const noPct = noPrice * 100;
-  const impliedMultiplier = yesPrice > 0 ? (1 / yesPrice).toFixed(1) : "∞";
-
-  const venueMeta = VENUE_META[venue ?? "polymarket"];
-  const volumeUnit = venueMeta.volumeUnit;
-  const liquidityUnit = venueMeta.liquidityUnit;
-
-  // Spread and mid-price
-  const hasQuotes = typeof bestBid === "number" && typeof bestAsk === "number";
-  const spread = hasQuotes ? Math.max(0, bestAsk! - bestBid!) : undefined;
-  const mid = hasQuotes ? (bestAsk! + bestBid!) / 2 : undefined;
-  const spreadPct = hasQuotes && mid && mid > 0 ? (spread! / mid) * 100 : undefined;
-
-  // Top-of-book depth (sum of first 1–3 levels)
-  const sumDepth = (levels: OrderBookLevel[]) =>
-    levels.slice(0, 3).reduce((acc, lvl) => acc + (lvl.size || 0), 0);
-
-  const bidDepth = sumDepth(bids);
-  const askDepth = sumDepth(asks);
-
-  let depthLabel = "Balanced book";
-  if (bidDepth > askDepth * 1.4) depthLabel = "Bid-heavy";
-  else if (askDepth > bidDepth * 1.4) depthLabel = "Ask-heavy";
-
+function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div
-      id="market-snapshot-card"
-      className="rounded-lg bg-glass p-6 shadow-soft border border-ring backdrop-blur-glass overflow-visible relative"
-      style={{ WebkitBackdropFilter: "blur(var(--blur))" }}
-    >
-      {/* Header: title + chips */}
-      <div className="mb-3 flex items-start justify-between gap-3 overflow-visible">
-        <div className="min-w-0 overflow-visible">
-          <div className="py-2 flex items-center gap-2 text-base uppercase tracking-[0.18em] text-[#1e3a8a]">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48" className="text-[#1e3a8a]">
-              <g fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4">
-                <path d="M44 11a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v9h40v-9ZM4.112 39.03l12.176-12.3l6.58 6.3L30.91 26l4.48 4.368"/>
-                <path d="M44 18v19a3 3 0 0 1-3 3H12m7.112-26h18M11.11 14h2M4 18v9"/>
-              </g>
-            </svg>
-            <span>Market snapshot</span>
-            {venue && (
-              <span className="ml-1 inline-flex rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#1e3a8a]">
-                {venueMeta.name}
-              </span>
-            )}
-          </div>
-          <div className="mt-1 flex items-center gap-2 pt-2 px-2">
-            <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-xs uppercase tracking-[0.1em] text-[#1e3a8a]">
-              EVENT:
-            </span>
-            <h3 className="text-sm font-semibold text-slate-900">
-              {eventTitle}
-            </h3>
-          </div>
-          {question && (
-            <div className="mt-2 ml-4 flex flex-wrap items-center gap-2 pb-2 px-2 overflow-visible">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256" className="text-[#1e3a8a]">
-                <path fill="currentColor" d="m228.24 156.24l-48 48a6 6 0 0 1-8.48-8.48L209.51 158H128A102.12 102.12 0 0 1 26 56a6 6 0 0 1 12 0a90.1 90.1 0 0 0 90 90h81.51l-37.75-37.76a6 6 0 0 1 8.48-8.48l48 48a6 6 0 0 1 0 8.48Z"/>
-              </svg>
-              <div 
-                className="relative inline-block group overflow-visible"
-                onMouseEnter={() => {
-                  if (previousMarkets.length > 0) {
-                    setIsMarketDropdownOpen(true);
-                  }
-                }}
-                onMouseLeave={() => setIsMarketDropdownOpen(false)}
-              >
-                <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-xs uppercase tracking-[0.1em] text-[#1e3a8a] cursor-pointer">
-                  MARKET:
-                </span>
-                {previousMarkets.length > 0 && (
-                  <div 
-                    className={`absolute left-0 top-full z-[9999] w-64 rounded-xl border border-neutral-200 bg-white p-1 shadow-lg transition-all duration-200 ${
-                      isMarketDropdownOpen ? 'opacity-100 mt-1 pointer-events-auto block' : 'opacity-0 mt-0 pointer-events-none hidden'
-                    }`}
-                    style={{ position: 'absolute', zIndex: 9999 }}
-                    onMouseEnter={() => setIsMarketDropdownOpen(true)}
-                    onMouseLeave={() => setIsMarketDropdownOpen(false)}
-                  >
-                    <ul className="max-h-60 overflow-auto">
-                      {previousMarkets.map((market) => (
-                        <li key={market.market_id}>
-                          <button
-                            type="button"
-                            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-neutral-100 transition-colors ${
-                              activeMarketId === market.market_id ? "bg-[#1e3a8a]/10" : ""
-                            }`}
-                            onClick={() => {
-                              onMarketSelect?.(market.market_id);
-                              setIsMarketDropdownOpen(false);
-                            }}
-                          >
-                            <span
-                              className={`flex-1 line-clamp-2 ${
-                                activeMarketId === market.market_id
-                                  ? "text-[#1e3a8a] font-semibold"
-                                  : "text-neutral-800"
-                              }`}
-                            >
-                              {market.question}
-                            </span>
-                            {activeMarketId === market.market_id && (
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="20"
-                                height="20"
-                                viewBox="0 0 24 24"
-                                className="text-[#1e3a8a]"
-                              >
-                                <path
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="1.5"
-                                  d="M5 14.5s1.5 0 3.5 3.5c0 0 5.559-9.167 10.5-11"
-                                />
-                              </svg>
-                            )}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-              <p className="text-[13px] font-medium leading-snug text-slate-800">
-                {question}
-              </p>
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          {endDate ? (
-            <div className="group relative inline-flex items-center gap-1 rounded-full bg-transparent px-2 py-2 text-sm cursor-help">
-              <Timer className={`h-5 w-5 ${countdownColor} animate-pulse`} />
-              <span className={countdownColor}>Closes in {closesIn}</span>
-              <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50">
-                <div className="bg-slate-900 text-white text-xs rounded-lg py-2 px-3 shadow-lg whitespace-nowrap relative">
-                  <div className="font-semibold mb-1">Closure Date</div>
-                  <div>{new Date(endDate).toLocaleString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}</div>
-                  <div className="absolute top-full right-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-slate-900"></div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <span className={`inline-flex items-center gap-1 rounded-full bg-transparent px-2 py-2 text-sm ${countdownColor}`}>
-              <Timer className={`h-5 w-5 ${countdownColor} animate-pulse`} />
-              Closes in {closesIn}
-            </span>
-          )}
-        </div>
+    <div className="rounded p-3 bg-glass-strong border border-ring shadow-neu-inset">
+      <div className="font-mono uppercase text-ink-mute" style={{ fontSize: 9, letterSpacing: 1.2 }}>
+        {label}
       </div>
-
-      {/* 2x3 Grid: YES/NO/Metrics and Order Book/Comments */}
-      <div className="mb-3 grid gap-3 text-xs sm:grid-cols-[1fr_1fr_auto]">
-        {/* Row 1, Column 1: YES side */}
-        <div id="tile-yes" className="flex flex-col rounded-2xl bg-teal-700 p-3 ring-1 ring-teal-500/45">
-          <div>
-            <p className="text-base font-semibold tracking-wide text-white">YES</p>
-            <p className="mt-1 text-3xl font-semibold text-white">
-              {yesPrice.toFixed(3)}
-              <span className="ml-1 text-[11px] text-white/90">
-                ({yesPct.toFixed(1)}%)
-              </span>
-            </p>
-            <p className="mt-1 text-[10px] text-white/80">
-              Implied multiplier:{" "}
-              <span className="text-white">{impliedMultiplier}x</span>
-            </p>
-          </div>
-          <p className="mt-auto pt-2 text-[10px] text-white/70">
-            Cheap lottery ticket territory if you think the world is wrong.
-          </p>
-        </div>
-
-        {/* Row 1, Column 2: NO side */}
-        <div id="tile-no" className="flex flex-col rounded-2xl bg-rose-700 p-3 ring-1 ring-rose-500/45">
-          <div>
-            <p className="text-base font-semibold tracking-wide text-white">NO</p>
-            <p className="mt-1 text-3xl font-semibold text-white">
-              {noPrice.toFixed(3)}
-              <span className="ml-1 text-[11px] text-white/90">
-                ({noPct.toFixed(1)}%)
-              </span>
-            </p>
-          </div>
-          <p className="mt-auto pt-2 text-[10px] text-white/70">
-            Market is basically saying &quot;no way&quot; right now.
-          </p>
-        </div>
-
-        {/* Row 1, Column 3: Market Metrics - stacked */}
-        <div className="flex flex-col w-fit">
-          <div className="flex items-center gap-2 bg-transparent p-2.5 border-b border-gray-400">
-            <Activity className="h-3.5 w-3.5 text-sky-400" />
-            <div>
-              <p className="text-[11px] text-slate-500 font-medium">Volume (24h)</p>
-              <p className="text-base font-semibold text-black">
-                {volume24h != null
-                  ? `${formatUsdCompact(volume24h)} ${volumeUnit}`
-                  : `${formatUsdCompact(marketVolume)} ${volumeUnit}`}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 bg-transparent p-2.5 border-b border-gray-400">
-            <Waves className="h-3.5 w-3.5 text-emerald-400" />
-            <div>
-              <p className="text-[11px] text-slate-500 font-medium">Total volume</p>
-              <p className="text-base font-semibold text-black">
-                {formatUsdCompact(marketVolume)} {volumeUnit}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 bg-transparent p-2.5">
-            <Scale className="h-3.5 w-3.5 text-purple-400" />
-            <div>
-              <p className="text-[11px] text-slate-500 font-medium">
-                {venue === "kalshi" ? "Open interest" : "Liquidity"}
-              </p>
-              <p className="text-base font-semibold text-black">
-                {liquidity != null ? `${formatUsdCompact(liquidity)} ${liquidityUnit}` : "—"}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Row 2, Column 1: Order Book snapshot */}
-        <div id="market-snapshot-micro" className="flex flex-col gap-1 rounded-2xl bg-transparent px-3 py-2 text-sm text-black">
-        <div className="flex flex-wrap items-center gap-2">
-          {bestBid == null && bestAsk == null && bids.length === 0 && asks.length === 0 ? (
-            <span className="text-slate-500">
-              Order book snapshot not available.
-            </span>
-          ) : (
-            <>
-              <span>
-                <span className="text-slate-500">Bid</span>{" "}
-                <span className="font-mono text-black">
-                  {bestBid != null ? bestBid.toFixed(3) : "—"}
-                </span>
-              </span>
-              <span className="text-black">·</span>
-              <span>
-                <span className="text-slate-500">Ask</span>{" "}
-                <span className="font-mono text-black">
-                  {bestAsk != null ? bestAsk.toFixed(3) : "—"}
-                </span>
-              </span>
-              {spread != null && (
-                <>
-                  <span className="text-black">·</span>
-                  <span>
-                    <span className="text-slate-500">Spread</span>{" "}
-                    <span className="font-mono text-black">
-                      {spread.toFixed(3)}
-                    </span>
-                    {spreadPct != null && (
-                      <span className="ml-1 text-slate-500">
-                        (~{spreadPct.toFixed(1)}% of mid)
-                      </span>
-                    )}
-                  </span>
-                </>
-              )}
-            </>
-          )}
-        </div>
-        {bids.length > 0 || asks.length > 0 ? (
-          <div className="flex items-center gap-2 whitespace-nowrap">
-            <span className="text-black">
-              Depth (top 3) — bid{" "}
-              <span className="font-mono text-black">
-                {formatUsdCompact(bidDepth)}
-              </span>{" "}
-              vs ask{" "}
-              <span className="font-mono text-black">
-                {formatUsdCompact(askDepth)}
-              </span>
-            </span>
-            <span className="shrink-0 rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-slate-300">
-              {depthLabel}
-            </span>
-          </div>
-        ) : null}
-        <div className="mt-1">
-          <span className="text-xs text-slate-500">
-            Snapshot for analysis only — not execution advice.
+      <div className="font-mono font-semibold text-ink mt-0.5" style={{ fontSize: 16 }}>
+        {value}
+        {unit && (
+          <span className="font-mono font-normal text-ink-mute ml-1" style={{ fontSize: 10 }}>
+            {unit}
           </span>
-        </div>
-        </div>
-
-        {/* Row 2, Column 2: Comments */}
-        <div id="market-snapshot-stats" className="flex flex-col gap-2 rounded-2xl bg-transparent px-3 py-2 text-sm text-black">
-          <div className="flex items-center gap-2">
-            <MessageCircle className="h-3.5 w-3.5 text-slate-500" />
-            <span className="text-slate-500">Comments</span>
-          </div>
-          {eventCommentCount != null || seriesCommentCount != null ? (
-            <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-              {eventCommentCount != null && (
-                <div>
-                  Event:{" "}
-                  <span className="font-semibold text-black">
-                    {eventCommentCount.toLocaleString()}
-                  </span>
-                </div>
-              )}
-              {seriesCommentCount != null && (
-                <div>
-                  Series:{" "}
-                  <span className="font-semibold text-black">
-                    {seriesCommentCount.toLocaleString()}
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <span className="font-semibold text-black">
-              {commentCount != null ? commentCount.toLocaleString() : "—"}
-            </span>
-          )}
-        </div>
-
-        {/* Row 2, Column 3: Empty */}
-        <div></div>
-      </div>
-
-      {/* Tags and Kalshi link - bottom row */}
-      <div className="flex items-center justify-between mt-3">
-        {groupItemTitle && (
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-600 font-medium">Tags:</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-[#1e3a8a]">
-              <Hash className="h-3 w-3 text-[#1e3a8a]" />
-              {groupItemTitle}
-            </span>
-          </div>
         )}
-        <a
-          href={marketUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="group rounded-lg bg-white/90 px-2 py-1.5 flex items-center gap-1.5 hover:bg-white transition-colors"
-        >
-          <img
-            src={venueMeta.favicon}
-            alt={venueMeta.name}
-            className="h-4 w-4 object-contain"
-            onError={(e) => {
-              const img = e.currentTarget as HTMLImageElement;
-              img.style.display = "none";
-            }}
-          />
-          <span className="text-[10px] text-slate-700 font-medium group-hover:text-[#1e3a8a] transition-colors">
-            {venueMeta.name}
-          </span>
-          <ArrowUpRight className="h-3 w-3 text-slate-500 group-hover:text-[#1e3a8a] transition-colors" />
-        </a>
       </div>
     </div>
   );
 }
 
+function ProbCard({
+  side,
+  color,
+  softBg,
+  pct,
+  price,
+  note,
+}: {
+  side: "YES" | "NO";
+  color: string;
+  softBg: string;
+  pct: number;
+  price: number;
+  note: string;
+}) {
+  return (
+    <div
+      id={side === "YES" ? "tile-yes" : "tile-no"}
+      className="relative overflow-hidden rounded p-3.5"
+      style={{ background: softBg, border: `1px solid ${color}22` }}
+    >
+      <div className="absolute top-0 left-0 right-0" style={{ height: 2, background: color, opacity: 0.6 }} />
+      <div className="flex items-baseline gap-2">
+        <span className="font-mono font-bold" style={{ color, fontSize: 10, letterSpacing: 1.2 }}>{side}</span>
+        <span className="font-mono text-ink-mute" style={{ fontSize: 10 }}>{price.toFixed(3)}</span>
+      </div>
+      <div className="font-semibold leading-tight" style={{ color, fontSize: 30, letterSpacing: "-0.03em" }}>
+        {pct.toFixed(1)}<span style={{ fontSize: 18, opacity: 0.6 }}>%</span>
+      </div>
+      <div className="text-[11px] text-ink-soft mt-0.5">{note}</div>
+    </div>
+  );
+}
 
+function getCountdownColor(endDate?: string): string {
+  if (!endDate) return "var(--no)";
+  try {
+    const end = new Date(endDate).getTime();
+    if (Number.isNaN(end)) return "var(--no)";
+    const diffDays = Math.max(0, end - Date.now()) / (1000 * 60 * 60 * 24);
+    if (diffDays < 1) return "var(--no)";
+    if (diffDays < 7) return "var(--accent)";
+    return "var(--yes)";
+  } catch {
+    return "var(--no)";
+  }
+}
+
+export function MarketCard(props: MarketSnapshotProps) {
+  const venue = props.venue ?? "polymarket";
+  const venueMeta = VENUE_META[venue];
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const yesPct = (props.yesPrice ?? 0) * 100;
+  const noPct = (props.noPrice ?? 0) * 100;
+
+  const hasQuotes = typeof props.bestBid === "number" && typeof props.bestAsk === "number";
+  const spread = hasQuotes ? Math.max(0, (props.bestAsk ?? 0) - (props.bestBid ?? 0)) : 0;
+
+  // Depth label (preserved from existing logic)
+  const sumDepth = (levels: OrderBookLevel[] | undefined) =>
+    (levels ?? []).slice(0, 3).reduce((acc, lvl) => acc + (lvl.size || 0), 0);
+  const bidDepth = sumDepth(props.bids);
+  const askDepth = sumDepth(props.asks);
+  let depthLabel: string | null = null;
+  if (bidDepth > 0 || askDepth > 0) {
+    if (bidDepth > askDepth * 1.4) depthLabel = "Bid-heavy";
+    else if (askDepth > bidDepth * 1.4) depthLabel = "Ask-heavy";
+    else depthLabel = "Balanced book";
+  }
+
+  const buckets = useMemo(
+    () => articlesToBuckets(props.articles ?? []),
+    [props.articles],
+  );
+  const totalComments =
+    (props.eventCommentCount ?? props.commentCount ?? 0) +
+    (props.seriesCommentCount ?? 0);
+  const showLiveCard = buckets.length > 0 || totalComments > 0;
+
+  const liveAge = props.lastRefreshedAt != null
+    ? Math.max(0, Math.floor((Date.now() - props.lastRefreshedAt) / 1000))
+    : null;
+  const liveLabel =
+    liveAge == null
+      ? null
+      : liveAge < 60
+        ? `LIVE · ${liveAge}s`
+        : liveAge < 3600
+          ? `LIVE · ${Math.floor(liveAge / 60)}m`
+          : null;
+
+  const yesNote =
+    yesPct > 90 ? "Market favors YES strongly" :
+    yesPct > 50 ? "Market favors YES" :
+    yesPct > 10 ? "Could go either way" :
+    "Cheap lottery territory";
+  const noNote =
+    noPct > 90 ? "Market is saying \"no way\"" :
+    noPct > 50 ? "Market favors NO" :
+    noPct > 10 ? "Could go either way" :
+    "Cheap lottery territory";
+
+  // Adapt previousMarkets shape (snake_case from API → camelCase for chip)
+  const siblings = (props.previousMarkets ?? []).map((m) => ({
+    marketId: m.market_id,
+    name: m.question,
+  }));
+
+  const countdownColor = getCountdownColor(props.endDate);
+  const countdownColorClass =
+    countdownColor === "var(--yes)"
+      ? "text-green-500"
+      : countdownColor === "var(--accent)"
+        ? "text-yellow-500"
+        : "text-red-500";
+
+  return (
+    <div
+      id="market-snapshot-card"
+      className="relative rounded-lg bg-glass border border-ring shadow-soft backdrop-blur-glass p-5 overflow-visible"
+    >
+      <div
+        className="absolute inset-0 rounded-lg pointer-events-none"
+        style={{ boxShadow: "inset 0 1px 0 var(--highlight)" }}
+      />
+
+      <div className="grid items-start gap-5 relative" style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}>
+        <div className="min-w-0">
+          {/* Event line */}
+          <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+            <span className="font-mono uppercase text-ink-mute" style={{ fontSize: 10, letterSpacing: 1.4 }}>
+              EVENT
+            </span>
+            <span className="text-[13px] text-ink-soft font-medium">{props.eventTitle}</span>
+            {props.resolvedOutcome && (
+              <span
+                className="font-mono uppercase font-semibold"
+                style={{
+                  fontSize: 9,
+                  letterSpacing: 0.6,
+                  background: "var(--no-soft)",
+                  color: "var(--no)",
+                  padding: "2px 6px",
+                  borderRadius: 3,
+                }}
+              >
+                RESOLVED · {props.resolvedOutcome}
+              </span>
+            )}
+            {props.endDate && !props.resolvedOutcome && (
+              <span
+                className={`font-mono uppercase font-semibold ${countdownColorClass}`}
+                style={{
+                  fontSize: 9,
+                  letterSpacing: 0.6,
+                  color: countdownColor,
+                  marginLeft: "auto",
+                }}
+                title={new Date(props.endDate).toLocaleString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              >
+                Closes in {props.closesIn}
+              </span>
+            )}
+            {!props.endDate && !props.resolvedOutcome && (
+              <span
+                className={`font-mono uppercase font-semibold ${countdownColorClass}`}
+                style={{
+                  fontSize: 9,
+                  letterSpacing: 0.6,
+                  color: countdownColor,
+                  marginLeft: "auto",
+                }}
+              >
+                Closes in {props.closesIn}
+              </span>
+            )}
+          </div>
+
+          {/* Market picker (chip) when there are sibling markets, otherwise simple title + venue link */}
+          {siblings.length > 0 && (props.question ?? props.groupItemTitle) ? (
+            <MarketPickerChip
+              current={{
+                marketId: props.activeMarketId ?? siblings[0].marketId,
+                name: props.question ?? props.groupItemTitle ?? "",
+              }}
+              siblings={siblings}
+              venue={venue}
+              venueUrl={props.marketUrl}
+              open={pickerOpen}
+              onToggle={() => setPickerOpen((o) => !o)}
+              onPick={(id) => {
+                setPickerOpen(false);
+                props.onMarketSelect?.(id);
+              }}
+            />
+          ) : (
+            <div className="mb-3.5 flex items-start gap-2.5">
+              {(props.question || props.groupItemTitle) && (
+                <span className="flex-1 text-[21px] font-semibold leading-tight text-ink" style={{ letterSpacing: "-0.02em" }}>
+                  {props.question ?? props.groupItemTitle}
+                </span>
+              )}
+              <a
+                href={props.marketUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`inline-flex items-center gap-1.5 rounded-full bg-glass-strong shadow-neu-raised border border-ring py-1 pl-1.5 pr-2.5 text-[10.5px] font-semibold text-ink no-underline flex-shrink-0 mt-1 ${(props.question || props.groupItemTitle) ? "" : "ml-auto"}`}
+              >
+                <img
+                  src={venueMeta.favicon}
+                  alt={venueMeta.name}
+                  width={13}
+                  height={13}
+                  className="rounded"
+                  onError={(e) => {
+                    const img = e.currentTarget as HTMLImageElement;
+                    img.style.display = "none";
+                  }}
+                />
+                {venueMeta.name}
+              </a>
+            </div>
+          )}
+
+          {/* YES / NO probability cards */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <ProbCard
+              side="YES"
+              color="var(--yes)"
+              softBg="var(--yes-soft)"
+              pct={yesPct}
+              price={props.yesPrice ?? 0}
+              note={yesNote}
+            />
+            <ProbCard
+              side="NO"
+              color="var(--no)"
+              softBg="var(--no-soft)"
+              pct={noPct}
+              price={props.noPrice ?? 0}
+              note={noNote}
+            />
+          </div>
+
+          {/* Bid / Ask / Spread + depth label + tags */}
+          <div className="flex items-center gap-4 mt-3 font-mono text-[11px] text-ink-mute flex-wrap">
+            <span>
+              BID <span className="text-ink-soft">{(props.bestBid ?? 0).toFixed(3)}</span>
+            </span>
+            <span>
+              ASK <span className="text-ink-soft">{(props.bestAsk ?? 0).toFixed(3)}</span>
+            </span>
+            <span>
+              SPREAD <span className="text-ink-soft">{spread.toFixed(3)}</span>
+            </span>
+            {depthLabel && (
+              <span
+                className="font-mono uppercase"
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: 3,
+                  background: "var(--neu-track)",
+                  color: "var(--ink-soft)",
+                  fontSize: 9,
+                  letterSpacing: 0.6,
+                }}
+              >
+                {depthLabel}
+              </span>
+            )}
+            <span className="flex-1" />
+            {props.groupItemTitle && (
+              <span
+                className="font-mono"
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: 3,
+                  background: "var(--accent-soft)",
+                  color: "var(--accent)",
+                  letterSpacing: 0.6,
+                }}
+              >
+                #{props.groupItemTitle}
+              </span>
+            )}
+            {(props.tags ?? []).map((t) => (
+              <span
+                key={t}
+                className="font-mono"
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: 3,
+                  background: "var(--accent-soft)",
+                  color: "var(--accent)",
+                  letterSpacing: 0.6,
+                }}
+              >
+                #{t}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Stats rail */}
+        <div className="grid gap-2.5" style={{ width: 150 }}>
+          <Stat label="24H VOLUME" value={fmtNumber(props.volume24h)} unit={venueMeta.volumeUnit} />
+          <Stat label="TOTAL" value={fmtNumber(props.marketVolume)} unit={venueMeta.volumeUnit} />
+          <Stat
+            label={venue === "kalshi" ? "OPEN INTEREST" : "LIQUIDITY"}
+            value={fmtNumber(props.liquidity)}
+            unit={venueMeta.liquidityUnit}
+          />
+
+          {showLiveCard && (
+            <div className="rounded p-3 bg-glass-strong border border-ring shadow-neu-raised flex flex-col gap-1.5">
+              {liveLabel && (
+                <div
+                  className="flex items-center gap-1.5 font-mono uppercase text-ink-mute"
+                  style={{ fontSize: 9, letterSpacing: 1.2 }}
+                >
+                  <span
+                    className="rounded-full"
+                    style={{
+                      width: 6,
+                      height: 6,
+                      background: "var(--yes)",
+                      boxShadow: "0 0 6px var(--yes)",
+                    }}
+                  />
+                  {liveLabel}
+                </div>
+              )}
+              {totalComments > 0 && (
+                <div className="font-mono text-ink-soft" style={{ fontSize: 11 }}>
+                  <span className="text-ink font-semibold">{totalComments.toLocaleString()}</span>
+                  <span className="text-ink-mute"> comments</span>
+                </div>
+              )}
+              {buckets.length > 0 && <ActivitySparkline buckets={buckets} />}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default MarketCard;

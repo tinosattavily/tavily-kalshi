@@ -130,7 +130,7 @@ describe("MarketCard", () => {
       { market_id: "market-1", slug: "market-1", question: "Market 1?" },
       { market_id: "market-2", slug: "market-2", question: "Market 2?" },
     ];
-    
+
     render(
       <MarketCard
         {...defaultProps}
@@ -140,15 +140,15 @@ describe("MarketCard", () => {
         activeMarketId="market-1"
       />
     );
-    
-    // Hover to show dropdown
-    const marketLabel = screen.getByText(/MARKET:/i);
-    fireEvent.mouseEnter(marketLabel);
-    
-    // Click on a market
+
+    // Click the picker chip to open the dropdown
+    const marketLabel = screen.getByText("MARKET");
+    fireEvent.click(marketLabel);
+
+    // Click on a sibling market
     const marketButton = screen.getByText("Market 2?");
     fireEvent.click(marketButton);
-    
+
     expect(onMarketSelect).toHaveBeenCalledWith("market-2");
   });
 
@@ -203,36 +203,33 @@ describe("MarketCard", () => {
     expect(timer).toHaveClass("text-red-500");
   });
 
-  test("handles market dropdown hover and mouse leave", () => {
+  test("toggles market picker dropdown via click", () => {
     const onMarketSelect = jest.fn();
     const previousMarkets = [
       { market_id: "market-1", slug: "market-1", question: "Market 1?" },
       { market_id: "market-2", slug: "market-2", question: "Market 2?" },
     ];
-    
+
     render(
       <MarketCard
         {...defaultProps}
         question="Test?"
         previousMarkets={previousMarkets}
         onMarketSelect={onMarketSelect}
+        activeMarketId="market-1"
       />
     );
-    
-    // Find the market label container
-    const marketLabelContainer = screen.getByText(/MARKET:/i).closest("div");
-    expect(marketLabelContainer).toBeInTheDocument();
-    
-    // Hover to show dropdown
-    if (marketLabelContainer) {
-      fireEvent.mouseEnter(marketLabelContainer);
-      // Dropdown should be visible
-      expect(screen.getByText("Market 1?")).toBeInTheDocument();
-      
-      // Mouse leave to hide dropdown
-      fireEvent.mouseLeave(marketLabelContainer);
-      // Note: The dropdown might still be in DOM but hidden, so we test the interaction
-    }
+
+    // The picker chip exposes a "MARKET" label as a button
+    const marketLabel = screen.getByText("MARKET");
+    expect(marketLabel).toBeInTheDocument();
+
+    // Click to open the dropdown
+    fireEvent.click(marketLabel);
+    expect(screen.getByText("Market 2?")).toBeInTheDocument();
+
+    // Click again to close
+    fireEvent.click(marketLabel);
   });
 
   test("handles Kalshi favicon image error", () => {
