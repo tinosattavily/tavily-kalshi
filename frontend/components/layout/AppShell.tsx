@@ -2,86 +2,59 @@
 
 import React, { ReactNode } from "react";
 import GridBackground from "./GridBackground";
-import TopNav from "./TopNav";
+import TopBar from "./TopBar";
+import type { Signal } from "../../types/signal";
 
 interface AppShellProps {
-  /** Header for the left sidebar (row 2, col 1) */
-  sidebarHeader: ReactNode;
-  /** Content for the left sidebar cards (row 3, col 1) */
-  sidebarContent: ReactNode;
-  /** URL input bar (row 2, col 3) */
+  /** URL input node — rendered centered in TopBar */
   urlInput: ReactNode;
-  /** Header for the right config panel (row 2, col 5) */
-  configHeader: ReactNode;
-  /** Content for the right config panel (row 3, col 3) */
-  configContent: ReactNode;
-  /** Main content area - results (row 3, col 2) */
-  children: ReactNode;
+  /** Signal pill — rendered top-right of TopBar; null hides the pill */
+  signal?: Signal | null;
+  /** Left column glass card (sessions list) */
+  sessions: ReactNode;
+  /** Center column main panel (snapshot + tabs + body) */
+  main: ReactNode;
+  /** Right column glass card (configuration) */
+  config: ReactNode;
 }
 
 /**
- * Application shell layout with 3-row, 5-column grid structure.
+ * Application shell layout — single top bar + 3-column body.
  *
- * Layout (5 columns: 2fr | 2fr | 4fr | 2fr | 2fr):
- * - Row 1: Empty | Navigation (spans 3 cols) | Empty
- * - Row 2: Sidebar Header | spacer | URL Input | spacer | Config Header
- * - Row 3: Sidebar Cards | Main Content (spans 3 cols) | Config Settings
+ * Layout:
+ * - Row 1: TopBar (60 px)
+ * - Row 2: Sessions (260 px) | Main (1fr) | Config (320 px)
  */
-export function AppShell({
-  sidebarHeader,
-  sidebarContent,
-  urlInput,
-  configHeader,
-  configContent,
-  children,
-}: AppShellProps): React.JSX.Element {
+export function AppShell({ urlInput, signal, sessions, main, config }: AppShellProps): React.JSX.Element {
   return (
-    <section id="app-root" className="relative min-h-screen overflow-hidden text-neutral-900 z-10">
+    <section
+      id="app-root"
+      className="relative min-h-screen overflow-x-auto z-10 text-ink"
+    >
       <GridBackground />
 
-      <div className="grid min-h-screen grid-cols-[2fr_2fr_4fr_2fr_2fr] grid-rows-[auto_auto_1fr]">
-        {/* Row 1, Col 1 - Empty header cell */}
-        <div className="border-y border-l border-neutral-300 bg-white/60 backdrop-blur-sm">
-          <div className="h-10" />
-        </div>
+      <TopBar urlInput={urlInput} signal={signal} />
 
-        {/* Row 1, Cols 2-4 - Navigation (spans 3 columns) */}
-        <div className="col-span-3">
-          <TopNav />
-        </div>
+      <div
+        className="grid gap-5"
+        style={{
+          gridTemplateColumns: "260px minmax(0, 1fr) 320px",
+          padding: "20px 28px 28px",
+          minWidth: 1280,
+        }}
+      >
+        {/* Left — sessions */}
+        <aside className="rounded-lg bg-glass shadow-soft border border-ring backdrop-blur-glass overflow-hidden">
+          {sessions}
+        </aside>
 
-        {/* Row 1, Col 5 - Empty header cell */}
-        <div className="border-y border-r border-neutral-300 bg-white/60 backdrop-blur-sm">
-          <div className="h-10" />
-        </div>
+        {/* Center — main */}
+        <section className="min-w-0 flex flex-col gap-4">{main}</section>
 
-        {/* Row 2, Col 1 - Sidebar Header */}
-        {sidebarHeader}
-
-        {/* Row 2, Col 2 - Left spacer */}
-        <div className="border-b border-neutral-300 bg-white/60 backdrop-blur-sm" />
-
-        {/* Row 2, Col 3 - URL Input */}
-        <div className="border-x border-b border-neutral-300 bg-white/60 backdrop-blur-sm p-4">
-          {urlInput}
-        </div>
-
-        {/* Row 2, Col 4 - Right spacer */}
-        <div className="border-b border-neutral-300 bg-white/60 backdrop-blur-sm" />
-
-        {/* Row 2, Col 5 - Config Header */}
-        {configHeader}
-
-        {/* Row 3, Col 1 - Sidebar Content */}
-        {sidebarContent}
-
-        {/* Row 3, Cols 2-4 - Main Content (spans 3 columns) */}
-        <div className="col-span-3 border-x border-b border-neutral-300 bg-white/60 backdrop-blur-sm flex flex-col overflow-auto">
-          {children}
-        </div>
-
-        {/* Row 3, Col 5 - Config Content */}
-        {configContent}
+        {/* Right — config */}
+        <aside className="rounded-lg bg-glass shadow-soft border border-ring backdrop-blur-glass overflow-hidden flex flex-col">
+          {config}
+        </aside>
       </div>
     </section>
   );

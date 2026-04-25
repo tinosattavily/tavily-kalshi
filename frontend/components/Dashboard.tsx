@@ -147,22 +147,7 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
 
   return (
     <AppShell
-      sidebarHeader={
-        <HistorySidebarHeader
-          isLoading={sessionsLoading}
-          onRefresh={fetchRecentRuns}
-        />
-      }
-      sidebarContent={
-        <HistorySidebarContent
-          runs={runs}
-          isLoading={sessionsLoading}
-          error={sessionsError}
-          activeRunId={(selectedRunId || runId) ?? undefined}
-          onRunSelect={handleRunSelect as (run: RecentRun) => void}
-          onRetry={fetchRecentRuns}
-        />
-      }
+      signal={results?.signal ?? null}
       urlInput={
         <UrlInput
           url={url}
@@ -174,33 +159,49 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
           onFocusChange={setIsFocused}
         />
       }
-      configHeader={
-        <ConfigPanelHeader
-          isSubmitting={isSubmitting}
-          onReset={handleResetConfig}
-        />
+      sessions={
+        <>
+          <HistorySidebarHeader
+            isLoading={sessionsLoading}
+            onRefresh={fetchRecentRuns}
+          />
+          <HistorySidebarContent
+            runs={runs}
+            isLoading={sessionsLoading}
+            error={sessionsError}
+            activeRunId={(selectedRunId || runId) ?? undefined}
+            onRunSelect={handleRunSelect as (run: RecentRun) => void}
+            onRetry={fetchRecentRuns}
+          />
+        </>
       }
-      configContent={
-        <ConfigPanelContent
-          config={configuration}
-          onChange={setConfiguration}
-          isSubmitting={isSubmitting}
-        />
+      main={
+        <div className="p-4" id="results-pane">
+          <AnalysisResultsView
+            results={results}
+            runStatus={runStatus}
+            url={url}
+            isSubmitting={isSubmitting}
+            selectedMarketId={selectedMarketId}
+            lastSortedMarketOptions={lastSortedMarketOptions}
+            onSelectMarket={handleSelectMarket}
+            onSortedOptionsChange={handleSortedOptionsChange}
+          />
+        </div>
       }
-    >
-      {/* Results Pane */}
-      <div className="p-4" id="results-pane">
-        <AnalysisResultsView
-          results={results}
-          runStatus={runStatus}
-          url={url}
-          isSubmitting={isSubmitting}
-          selectedMarketId={selectedMarketId}
-          lastSortedMarketOptions={lastSortedMarketOptions}
-          onSelectMarket={handleSelectMarket}
-          onSortedOptionsChange={handleSortedOptionsChange}
-        />
-      </div>
-    </AppShell>
+      config={
+        <>
+          <ConfigPanelHeader
+            isSubmitting={isSubmitting}
+            onReset={handleResetConfig}
+          />
+          <ConfigPanelContent
+            config={configuration}
+            onChange={setConfiguration}
+            isSubmitting={isSubmitting}
+          />
+        </>
+      }
+    />
   );
 }
