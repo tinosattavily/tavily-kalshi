@@ -1,8 +1,7 @@
 "use client";
 
 import React from "react";
-import { Clock, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import clsx from "clsx";
+import { Clock } from "lucide-react";
 
 export interface RecentRun {
   _id: string;
@@ -49,7 +48,8 @@ export default function RecentMarketCard({
     "Unknown Market";
 
   const yesPrice = run.market_snapshot?.yes_price ?? 0;
-  const noPrice = run.market_snapshot?.no_price ?? 0;
+  const yesPct = Math.round(yesPrice * 100);
+  const noPct = 100 - yesPct;
 
   // Format date
   const formatDate = (dateStr?: string): string => {
@@ -72,99 +72,135 @@ export default function RecentMarketCard({
     }
   };
 
-  // Get signal direction icon
-  const getSignalIcon = () => {
-    const direction = run.signal?.direction?.toLowerCase();
-    if (direction === "up") {
-      return <TrendingUp className="w-3 h-3 text-emerald-600" />;
-    }
-    if (direction === "down") {
-      return <TrendingDown className="w-3 h-3 text-rose-600" />;
-    }
-    return <Minus className="w-3 h-3 text-slate-400" />;
-  };
-
-  // Get confidence badge color
-  const getConfidenceColor = (): string => {
-    const confidence =
-      run.signal?.confidence_level?.toUpperCase() ||
-      run.signal?.confidence?.toUpperCase() ||
-      "";
-    if (confidence === "HIGH") return "bg-emerald-100 text-emerald-700";
-    if (confidence === "MEDIUM") return "bg-indigo-100 text-indigo-700";
-    return "bg-amber-100 text-amber-700";
-  };
-
-  const confidence =
-    run.signal?.confidence_level || run.signal?.confidence || "low";
-
-  // Check if analysis is complete
+  // Check if analysis is complete (preserved from original behavior)
   const isComplete =
     run.status?.market === "done" &&
     run.status?.news === "done" &&
     run.status?.signal === "done" &&
     run.status?.report === "done";
 
+  // Derive a status pill from existing data:
+  // - Not complete -> LIVE (running/pending)
+  // - Complete + signal up -> YES_WON
+  // - Complete + signal down -> NO_WON
+  // - Complete + neutral/none -> PENDING (LIVE label)
+  const direction = run.signal?.direction?.toLowerCase();
+  let statusKey = "PENDING";
+  if (!isComplete) {
+    statusKey = "RUNNING";
+  } else if (direction === "up") {
+    statusKey = "YES_WON";
+  } else if (direction === "down") {
+    statusKey = "NO_WON";
+  }
+
+  const statusMap: Record<
+    string,
+    { bg: string; fg: string; label: string }
+  > = {
+    NO_WON: { bg: "var(--no-soft)", fg: "var(--no)", label: "NO WON" },
+    YES_WON: { bg: "var(--yes-soft)", fg: "var(--yes)", label: "YES WON" },
+    PENDING: {
+      bg: "var(--neu-track)",
+      fg: "var(--ink-mute)",
+      label: "LIVE",
+    },
+    RUNNING: {
+      bg: "var(--neu-track)",
+      fg: "var(--ink-mute)",
+      label: "LIVE",
+    },
+  };
+  const st =
+    statusMap[statusKey] ?? {
+      bg: "var(--neu-track)",
+      fg: "var(--ink-mute)",
+      label: statusKey || "—",
+    };
+
+  const confidenceValue =
+    run.signal?.confidence_level || run.signal?.confidence;
+  const hasSignal = run.signal && Object.keys(run.signal).length > 0;
+
   return (
     <button
+      type="button"
       onClick={() => onClick(run)}
-      className={clsx(
-        "w-full text-left p-3 rounded-lg border transition-all duration-200",
-        "hover:shadow-md hover:border-indigo-300 overflow-hidden",
-        isActive
-          ? "bg-indigo-50 border-indigo-300 shadow-sm"
-          : "bg-white border-neutral-200 hover:bg-neutral-50",
-      )}
+      className={
+        "w-full text-left p-3 rounded mb-1.5 cursor-pointer transition-all border " +
+        (isActive
+          ? "bg-glass-strong shadow-neu-inset"
+          : "bg-transparent hover:bg-glass border-transparent")
+      }
+      style={{ borderColor: isActive ? "var(--accent-soft)" : undefined }}
     >
-      {/* Question/Title */}
-      <div className="mb-2 min-w-0">
-        <p className="text-sm font-medium text-neutral-800 line-clamp-2 break-words overflow-hidden">
-          {question}
-        </p>
+      <div
+        className="text-[12.5px] font-medium text-ink leading-snug"
+        style={{
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {question || "Untitled run"}
       </div>
-
-      {/* Price and Signal Row */}
-      <div className="flex items-center justify-between mb-2 min-w-0 gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs font-semibold text-emerald-600 whitespace-nowrap">
-            YES: {(yesPrice * 100).toFixed(1)}%
-          </span>
-          <span className="text-xs font-semibold text-rose-600 whitespace-nowrap">
-            NO: {(noPrice * 100).toFixed(1)}%
-          </span>
+      <div className="flex items-center gap-2 mt-2 font-mono text-[10px]">
+        <span className="text-yes-ink">{yesPct}%</span>
+        <div className="flex-1 h-0.5 rounded bg-no-soft relative overflow-hidden">
+          <div
+            className="absolute inset-0"
+            style={{ width: `${yesPct}%`, background: "var(--yes)" }}
+          />
         </div>
-        {run.signal && Object.keys(run.signal).length > 0 && (
-          <div className="flex-shrink-0">
-            {getSignalIcon()}
-          </div>
+        <span className="text-no-ink">{noPct}%</span>
+      </div>
+      <div className="flex items-center gap-2 mt-2 font-mono text-[10px] text-ink-mute flex-wrap">
+        <span className="inline-flex items-center gap-1">
+          <Clock size={10} />
+          {formatDate(run.run_at)}
+        </span>
+        <span className="flex-1" />
+        <span
+          className="font-mono uppercase font-semibold"
+          style={{
+            padding: "1px 6px",
+            borderRadius: 3,
+            background: st.bg,
+            color: st.fg,
+            letterSpacing: 0.5,
+          }}
+        >
+          {st.label}
+        </span>
+        {hasSignal && confidenceValue && (
+          <span
+            className="font-mono text-ink-mute"
+            style={{
+              fontSize: 9,
+              padding: "1px 4px",
+              border: "1px solid var(--line)",
+              borderRadius: 3,
+            }}
+          >
+            {String(confidenceValue).toUpperCase()}
+          </span>
         )}
-      </div>
-
-      {/* Footer: Date, Confidence, Status */}
-      <div className="flex items-center justify-between text-xs text-neutral-500 min-w-0 gap-2">
-        <div className="flex items-center gap-1 min-w-0">
-          <Clock className="w-3 h-3 flex-shrink-0" />
-          <span className="truncate">{formatDate(run.run_at)}</span>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {run.signal && Object.keys(run.signal).length > 0 && (
-            <span
-              className={clsx(
-                "px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap",
-                getConfidenceColor(),
-              )}
-            >
-              {confidence.toUpperCase()}
-            </span>
-          )}
-          {!isComplete && (
-            <span className="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700 whitespace-nowrap">
-              Incomplete
-            </span>
-          )}
-        </div>
+        {!isComplete && (
+          <span
+            className="font-mono"
+            style={{
+              fontSize: 9,
+              padding: "1px 4px",
+              background: "var(--no-soft)",
+              color: "var(--no)",
+              borderRadius: 3,
+            }}
+          >
+            INCOMPLETE
+          </span>
+        )}
       </div>
     </button>
   );
 }
-
