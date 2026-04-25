@@ -1,4 +1,5 @@
 import React from "react";
+import ClosesInChip from "./ClosesInChip";
 
 type MarketOption = {
   slug?: string;
@@ -23,6 +24,8 @@ type MarketOption = {
 type EventContext = {
   title?: string;
   image?: string;
+  endDate?: string;
+  end_date?: string;
 };
 
 type Props = {
@@ -33,6 +36,113 @@ type Props = {
   onSortedOptionsChange?: (options: MarketOption[]) => void;
 };
 
+const SORT_OPTIONS: { key: "active" | "soonest" | "total"; label: string }[] = [
+  { key: "active", label: "Active (24h volume)" },
+  { key: "soonest", label: "Soonest to close" },
+  { key: "total", label: "Highest total volume" },
+];
+
+const getMarketId = (m: MarketOption) => String(m.market_id ?? m.slug ?? m.id ?? "");
+const getMarketLabel = (m: MarketOption) =>
+  m.label || m.question || m.title || m.slug || m.market_id || "Market";
+
+function MarketGridCard({
+  m,
+  active,
+  isSubmitting,
+  onClick,
+}: {
+  m: MarketOption;
+  active: boolean;
+  isSubmitting: boolean;
+  onClick: () => void;
+}) {
+  const askVal = typeof m.best_ask === "number" ? m.best_ask : undefined;
+  const bidVal = typeof m.best_bid === "number" ? m.best_bid : undefined;
+  const ask = typeof askVal === "number" ? askVal.toFixed(2) : "—";
+  const bid = typeof bidVal === "number" ? bidVal.toFixed(2) : "—";
+  const mid =
+    typeof bidVal === "number" && typeof askVal === "number"
+      ? (bidVal + askVal) / 2
+      : typeof askVal === "number"
+      ? askVal
+      : 0;
+  const name = getMarketLabel(m);
+  const liq =
+    typeof m.liquidity === "number" && Number.isFinite(m.liquidity)
+      ? Number(m.liquidity).toLocaleString()
+      : "—";
+
+  return (
+    <button
+      id={`market-option-${getMarketId(m)}`}
+      type="button"
+      disabled={isSubmitting}
+      onClick={onClick}
+      className={
+        "relative overflow-hidden rounded p-3 text-left cursor-pointer transition-shadow border disabled:opacity-50 " +
+        (active
+          ? "bg-glass-strong shadow-neu-raised"
+          : "bg-glass shadow-soft backdrop-blur-glass")
+      }
+      style={{ borderColor: active ? "var(--accent-soft)" : "var(--ring)" }}
+    >
+      {active && (
+        <div
+          className="absolute top-0 left-0 right-0"
+          style={{ height: 2, background: "var(--accent)" }}
+        />
+      )}
+      <div className="flex items-start gap-2.5">
+        <div
+          className="grid place-items-center flex-shrink-0 mt-0.5 rounded bg-neu-track shadow-neu-inset"
+          style={{ width: 28, height: 28 }}
+        >
+          <div
+            className="rounded-sm"
+            style={{ width: 14, height: 14, background: "var(--accent)", opacity: 0.6 }}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div
+            className="text-[12.5px] font-semibold text-ink leading-tight"
+            style={{
+              letterSpacing: "-0.01em",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {name}
+          </div>
+          <div className="flex gap-2.5 mt-2 font-mono text-[10px] text-ink-mute">
+            <span>
+              BID <span className="text-ink-soft">{bid}</span>
+            </span>
+            <span>
+              ASK <span className="text-ink-soft">{ask}</span>
+            </span>
+            <span>
+              LIQ <span className="text-ink-soft">{liq}</span>
+            </span>
+          </div>
+          <div className="mt-2 h-0.5 rounded bg-neu-track shadow-neu-inset relative overflow-hidden">
+            <div
+              className="absolute left-0 inset-y-0"
+              style={{
+                width: `${Math.round(Math.max(0, Math.min(1, mid)) * 100)}%`,
+                background: "var(--accent)",
+                opacity: 0.8,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export default function MarketSelection({
   options,
   eventContext,
@@ -42,11 +152,6 @@ export default function MarketSelection({
 }: Props) {
   const [sortBy, setSortBy] = React.useState<"active" | "soonest" | "total">("active");
   const [isSortOpen, setIsSortOpen] = React.useState(false);
-  const [hoveredIndex, setHoveredIndex] = React.useState<number | null>(null);
-  const [sliderStyle, setSliderStyle] = React.useState<React.CSSProperties>({ opacity: 0 });
-  const buttonRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
-  const gridRef = React.useRef<HTMLDivElement | null>(null);
-  const count = options.length;
 
   // No filtering; operate directly on options
   const filteredOptions = options;
@@ -123,241 +228,128 @@ export default function MarketSelection({
     }
   }, [sortedOptions, onSortedOptionsChange]);
 
-  // Reset refs when sortedOptions changes
-  React.useEffect(() => {
-    buttonRefs.current = [];
-  }, [sortedOptions]);
+  const optionsCount = sortedOptions.length;
+  const colClass =
+    optionsCount === 1 ? "grid-cols-1" : optionsCount === 2 ? "grid-cols-2" : "grid-cols-3";
 
-  // Update slider position when hovered index changes
-  React.useEffect(() => {
-    if (hoveredIndex === null || !buttonRefs.current[hoveredIndex] || !gridRef.current) {
-      setSliderStyle({ opacity: 0 });
-      return;
-    }
+  const currentSortLabel =
+    SORT_OPTIONS.find((opt) => opt.key === sortBy)?.label ?? SORT_OPTIONS[0].label;
 
-    const button = buttonRefs.current[hoveredIndex];
-    const grid = gridRef.current;
-    if (!button || !grid) return;
-
-    const buttonRect = button.getBoundingClientRect();
-    const gridRect = grid.getBoundingClientRect();
-
-    setSliderStyle({
-      opacity: 1,
-      left: `${buttonRect.left - gridRect.left}px`,
-      top: `${buttonRect.top - gridRect.top}px`,
-      width: `${buttonRect.width}px`,
-      height: `${buttonRect.height}px`,
-    });
-  }, [hoveredIndex, sortedOptions]);
-
-  const getMarketId = (m: MarketOption) => String(m.market_id ?? m.slug ?? m.id ?? "");
-  const getMarketLabel = (m: MarketOption) =>
-    m.label || m.question || m.title || m.slug || m.market_id || "Market";
-
-  const MarketButton = (m: MarketOption, index: number) => {
-    const marketId = getMarketId(m);
-    const marketLabel = getMarketLabel(m);
-    return (
-    <button
-      id={`market-option-${marketId}`}
-      key={marketId}
-      ref={(el) => {
-        buttonRefs.current[index] = el;
-      }}
-      type="button"
-      disabled={isSubmitting}
-      onClick={() => onSelect(marketId)}
-      onMouseEnter={() => setHoveredIndex(index)}
-      className="text-left rounded-xl border border-transparent transition-all duration-300 ease-in-out p-4 bg-white/30 backdrop-blur-sm disabled:opacity-50 relative"
-      style={{ WebkitBackdropFilter: "blur(8px)", zIndex: 1 }}
-    >
-      <div className="flex items-start gap-3">
-        {m.image ? (
-          <img
-            src={m.image}
-            alt={marketLabel}
-            width={40}
-            height={40}
-            className="rounded-md border border-white/70 w-10 h-10 object-cover"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-            }}
-          />
-        ) : null}
-        <div className="flex-1">
-          <div className="font-medium text-neutral-900 line-clamp-2">
-            {marketLabel}
-          </div>
-          <div className="mt-1 text-xs text-neutral-600">
-            {(m.best_bid || m.best_ask) ? (
-              <span className="ml-2">Bid/Ask: {m.best_bid ?? "-"} / {m.best_ask ?? "-"}</span>
-            ) : null}
-            {m.liquidity ? <span className="ml-2">Liq: {Number(m.liquidity).toLocaleString()}</span> : null}
-          </div>
-          </div>
-        </div>
-    </button>
-    );
-  };
-
-  const SingleRow = (n: number) => {
-    const colClass = n === 1 ? "grid-cols-1" : n === 2 ? "grid-cols-2" : "grid-cols-3";
-    return (
-      <div 
-        id="market-options-grid" 
-        ref={gridRef}
-        className={`grid ${colClass} gap-3 relative`}
-        onMouseLeave={() => setHoveredIndex(null)}
-      >
-        <div
-          className="absolute rounded-xl bg-neutral-200/80 border border-white shadow-xl pointer-events-none transition-all duration-300 ease-in-out z-0"
-          style={sliderStyle}
-        />
-        {sortedOptions.map((m, idx) => MarketButton(m, idx))}
-      </div>
-    );
-  };
+  const closeTime = eventContext?.endDate ?? eventContext?.end_date;
 
   return (
     <div id="market-selection" className="mb-6">
       <div
-        className="rounded-2xl border border-white bg-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.1)] backdrop-blur-[11.3px] p-5 overflow-visible"
-        style={{ WebkitBackdropFilter: "blur(11.3px)" }}
+        className="relative rounded-lg p-5 bg-glass border border-ring shadow-soft backdrop-blur-glass mb-3.5"
       >
         <div
+          className="absolute inset-0 rounded-lg pointer-events-none"
+          style={{ boxShadow: "inset 0 1px 0 var(--highlight)" }}
+        />
+        <div
           id="market-selection-header"
-          className="flex items-start gap-3 mb-3 relative z-10 overflow-visible"
+          className="flex items-center gap-2.5 mb-1.5 flex-wrap relative z-10"
         >
-          {eventContext?.image ? (
-            <img
-              src={eventContext.image}
-              alt={eventContext.title || "Event"}
-              width={36}
-              height={36}
-              className="w-9 h-9 rounded-md border border-white object-cover"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
-            />
-          ) : null}
-          <div className="flex-1 flex flex-col justify-between h-12">
-            <div className="text-base font-semibold text-neutral-900 leading-none">
-              {eventContext?.title || "Event"}
-            </div>
-            <div className="text-xs text-neutral-600 leading-none">
-              {count === 1 ? getMarketLabel(options[0] || {}) : "Select a market"}
-            </div>
-          </div>
-        {/* Sort dropdown */}
-        <div id="market-sort" className="ml-auto relative select-none z-20">
-          <label className="block text-[10px] uppercase tracking-[0.14em] text-neutral-600 mb-1 text-right">
-            Sort by
-          </label>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-800 shadow-sm hover:bg-neutral-50"
-            onClick={() => setIsSortOpen((o) => !o)}
-            disabled={isSubmitting}
-            aria-haspopup="listbox"
-            aria-expanded={isSortOpen}
+          <span
+            className="font-mono uppercase text-ink-mute"
+            style={{ fontSize: 10, letterSpacing: 1.4 }}
           >
-            {sortBy === "active" && <span>Active (24h volume)</span>}
-            {sortBy === "soonest" && <span>Soonest to close</span>}
-            {sortBy === "total" && <span>Highest total volume</span>}
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" className="text-neutral-500">
-              <path fill="currentColor" d="m7 10l5 5l5-5z" />
-            </svg>
-          </button>
-          {isSortOpen && !isSubmitting && (
-            <div
-              id="market-sort-menu"
-              className="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-neutral-200 bg-white p-1 shadow-lg"
+            EVENT
+          </span>
+          <span className="flex-1 text-[13px] text-ink-soft font-medium">
+            {eventContext?.title ?? "Multi-market event"}
+          </span>
+          <ClosesInChip closeTime={closeTime} />
+        </div>
+        <div
+          className="text-[22px] font-semibold leading-tight text-ink mb-2.5 relative z-10"
+          style={{ letterSpacing: "-0.02em", maxWidth: 680 }}
+        >
+          Select a market to analyze
+        </div>
+        <div className="flex items-center gap-2.5 flex-wrap relative z-10">
+          <div
+            className="font-mono uppercase font-semibold"
+            style={{
+              padding: "6px 12px",
+              borderRadius: 999,
+              background: "var(--accent-soft)",
+              color: "var(--accent)",
+              fontSize: 10,
+              letterSpacing: 0.8,
+            }}
+          >
+            {optionsCount} MARKETS
+          </div>
+          <span className="flex-1" />
+          <div id="market-sort" className="relative select-none flex items-center gap-2.5">
+            <span
+              className="font-mono uppercase text-ink-mute"
+              style={{ fontSize: 10, letterSpacing: 1.2 }}
             >
-              <ul id="market-sort-options" role="listbox" className="max-h-60 overflow-auto">
-                {[
-                  { key: "active", label: "Active (24h volume)" },
-                  { key: "soonest", label: "Soonest to close" },
-                  { key: "total", label: "Highest total volume" },
-                ].map((opt) => (
-                  <li key={opt.key}>
-                    <button
-                      id={`market-sort-option-${opt.key}`}
-                      type="button"
-                      role="option"
-                      aria-selected={sortBy === opt.key}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm hover:bg-neutral-100"
-                      onClick={() => {
-                        setSortBy(opt.key as typeof sortBy);
-                        setIsSortOpen(false);
-                      }}
-                    >
-                      <span className="text-neutral-800">{opt.label}</span>
-                      {sortBy === opt.key && (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-                          <path fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M5 14.5s1.5 0 3.5 3.5c0 0 5.559-9.167 10.5-11" />
-                        </svg>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+              SORT BY
+            </span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-glass-strong shadow-neu-raised border border-ring text-[11px] text-ink"
+              onClick={() => setIsSortOpen((o) => !o)}
+              disabled={isSubmitting}
+              aria-haspopup="listbox"
+              aria-expanded={isSortOpen}
+            >
+              <span>{currentSortLabel}</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                className="text-ink-mute"
+              >
+                <path fill="currentColor" d="m7 10l5 5l5-5z" />
+              </svg>
+            </button>
+            {isSortOpen && !isSubmitting && (
+              <div
+                id="market-sort-menu"
+                className="absolute right-0 z-20 rounded p-1 bg-glass-strong border border-ring shadow-soft backdrop-blur-glass"
+                style={{ top: "calc(100% + 4px)", minWidth: 200 }}
+              >
+                <ul id="market-sort-options" role="listbox">
+                  {SORT_OPTIONS.map((opt) => (
+                    <li key={opt.key}>
+                      <button
+                        id={`market-sort-option-${opt.key}`}
+                        type="button"
+                        role="option"
+                        aria-selected={sortBy === opt.key}
+                        className="block w-full text-left rounded px-3 py-2 text-[12.5px] text-ink-soft hover:bg-accent-soft"
+                        onClick={() => {
+                          setSortBy(opt.key);
+                          setIsSortOpen(false);
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
-        </div>
+      </div>
 
-        {count <= 3 && SingleRow(count)}
-        {count === 4 && (
-          <div 
-            id="market-options-grid"
-            ref={gridRef}
-            className="grid grid-cols-2 gap-3 relative"
-            onMouseLeave={() => setHoveredIndex(null)}
-          >
-            <div
-              className="absolute rounded-xl bg-neutral-200/80 border border-white shadow-xl pointer-events-none transition-all duration-300 ease-in-out z-0"
-              style={sliderStyle}
-            />
-            {sortedOptions.map((m, idx) => MarketButton(m, idx))}
-          </div>
-        )}
-        {count === 5 && (
-          <div 
-            id="market-options-grid"
-            ref={gridRef}
-            className="space-y-3 relative"
-            onMouseLeave={() => setHoveredIndex(null)}
-          >
-            <div
-              className="absolute rounded-xl bg-neutral-200/80 border border-white shadow-xl pointer-events-none transition-all duration-300 ease-in-out z-0"
-              style={sliderStyle}
-            />
-            <div className="grid grid-cols-3 gap-3">
-              {sortedOptions.slice(0, 3).map((m, idx) => MarketButton(m, idx))}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {sortedOptions.slice(3).map((m, idx) => MarketButton(m, idx + 3))}
-            </div>
-          </div>
-        )}
-        {count >= 6 && (
-          <div 
-            id="market-options-grid"
-            ref={gridRef}
-            className="grid grid-cols-3 gap-3 relative"
-            onMouseLeave={() => setHoveredIndex(null)}
-          >
-            <div
-              className="absolute rounded-xl bg-neutral-200/80 border border-white shadow-xl pointer-events-none transition-all duration-300 ease-in-out z-0"
-              style={sliderStyle}
-            />
-            {sortedOptions.map((m, idx) => MarketButton(m, idx))}
-          </div>
-        )}
+      <div id="market-options-grid" className={`grid gap-2.5 ${colClass}`}>
+        {sortedOptions.map((m, i) => (
+          <MarketGridCard
+            key={getMarketId(m) || i}
+            m={m}
+            active={i === 0}
+            isSubmitting={isSubmitting}
+            onClick={() => onSelect(getMarketId(m))}
+          />
+        ))}
       </div>
     </div>
   );
 }
-
-

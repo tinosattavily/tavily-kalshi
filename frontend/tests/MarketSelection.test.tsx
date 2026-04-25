@@ -60,7 +60,7 @@ describe("MarketPicker Component", () => {
   test("renders component with options", () => {
     render(<MarketPicker {...defaultProps} />);
     expect(screen.getByText("Test Event")).toBeInTheDocument();
-    expect(screen.getByText("Select a market")).toBeInTheDocument();
+    expect(screen.getByText("Select a market to analyze")).toBeInTheDocument();
     expect(screen.getByText("Will X happen?")).toBeInTheDocument();
     expect(screen.getByText("Will Y happen?")).toBeInTheDocument();
     expect(screen.getByText("Will Z happen?")).toBeInTheDocument();
@@ -68,21 +68,23 @@ describe("MarketPicker Component", () => {
 
   test("renders without event context", () => {
     render(<MarketPicker {...defaultProps} eventContext={null} />);
-    expect(screen.getByText("Event")).toBeInTheDocument();
+    expect(screen.getByText("Multi-market event")).toBeInTheDocument();
   });
 
   test("renders single market with correct text", () => {
     render(<MarketPicker {...defaultProps} options={[mockOptions[0]]} />);
-    // When there's a question, it shows the question instead of "Selected market"
-    // The question appears in both the subtitle and the button
+    // The question appears in the button card.
     expect(screen.getAllByText("Will X happen?").length).toBeGreaterThan(0);
   });
 
   test("calls onSelect when market button is clicked", async () => {
     const user = userEvent.setup();
     render(<MarketPicker {...defaultProps} />);
-    const button = screen.getByRole("button", { name: /Will X happen/i });
-    await user.click(button);
+    const button = document.getElementById("market-option-market-1");
+    expect(button).not.toBeNull();
+    if (button) {
+      await user.click(button);
+    }
     expect(defaultProps.onSelect).toHaveBeenCalledWith("market-1");
   });
 
@@ -94,7 +96,11 @@ describe("MarketPicker Component", () => {
     render(<MarketPicker {...defaultProps} options={options} onSelect={onSelect} />);
 
     expect(screen.getAllByText("A").length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("button", { name: /^A$/i }));
+    const marketButton = document.getElementById("market-option-AAA-1");
+    expect(marketButton).not.toBeNull();
+    if (marketButton) {
+      await user.click(marketButton);
+    }
     expect(onSelect).toHaveBeenCalledWith("AAA-1");
   });
 
@@ -111,7 +117,7 @@ describe("MarketPicker Component", () => {
 
   test("renders sort dropdown", () => {
     render(<MarketPicker {...defaultProps} />);
-    expect(screen.getByText("Sort by")).toBeInTheDocument();
+    expect(screen.getByText("SORT BY")).toBeInTheDocument();
     expect(screen.getByText("Active (24h volume)")).toBeInTheDocument();
   });
 
@@ -214,17 +220,19 @@ describe("MarketPicker Component", () => {
 
   test("displays bid/ask when available", () => {
     render(<MarketPicker {...defaultProps} />);
-    expect(screen.getByText(/Bid\/Ask: 0\.5 \/ 0\.6/)).toBeInTheDocument();
+    // Bid/ask render as formatted mono values inside a card.
+    expect(screen.getAllByText("0.50").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("0.60").length).toBeGreaterThan(0);
   });
 
   test("displays liquidity when available", () => {
     render(<MarketPicker {...defaultProps} />);
-    expect(screen.getByText(/Liq: 1,000/)).toBeInTheDocument();
+    expect(screen.getAllByText("1,000").length).toBeGreaterThan(0);
   });
 
   test("handles image load error", () => {
     render(<MarketPicker {...defaultProps} />);
-    const images = screen.getAllByRole("img");
+    const images = screen.queryAllByRole("img");
     const marketImage = images.find((img) => (img as HTMLImageElement).alt === "Market");
     if (marketImage) {
       fireEvent.error(marketImage);
@@ -234,7 +242,7 @@ describe("MarketPicker Component", () => {
 
   test("handles event image load error", () => {
     render(<MarketPicker {...defaultProps} />);
-    const images = screen.getAllByRole("img");
+    const images = screen.queryAllByRole("img");
     const eventImage = images.find((img) => (img as HTMLImageElement).alt === "Event");
     if (eventImage) {
       fireEvent.error(eventImage);
@@ -267,6 +275,7 @@ describe("MarketPicker Component", () => {
     render(<MarketPicker {...defaultProps} options={fourMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
+    expect(grid).toHaveClass("grid-cols-3");
   });
 
   test("renders correct grid layout for 5 markets", () => {
@@ -288,6 +297,7 @@ describe("MarketPicker Component", () => {
     render(<MarketPicker {...defaultProps} options={fiveMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
+    expect(grid).toHaveClass("grid-cols-3");
   });
 
   test("renders correct grid layout for 6+ markets", () => {
@@ -315,6 +325,7 @@ describe("MarketPicker Component", () => {
     render(<MarketPicker {...defaultProps} options={sixMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
+    expect(grid).toHaveClass("grid-cols-3");
   });
 
   test("handles markets without end_date", () => {
@@ -493,7 +504,7 @@ describe("MarketPicker Component", () => {
 
   test("handles market image load error", () => {
     render(<MarketPicker {...defaultProps} />);
-    const images = screen.getAllByRole("img");
+    const images = screen.queryAllByRole("img");
     const marketImage = images.find((img) => (img as HTMLImageElement).alt === "Market");
     if (marketImage) {
       fireEvent.error(marketImage);
@@ -501,9 +512,9 @@ describe("MarketPicker Component", () => {
     }
   });
 
-  test("handles event image load error", () => {
+  test("handles event image load error (duplicate coverage)", () => {
     render(<MarketPicker {...defaultProps} />);
-    const images = screen.getAllByRole("img");
+    const images = screen.queryAllByRole("img");
     const eventImage = images.find((img) => (img as HTMLImageElement).alt === "Event");
     if (eventImage) {
       fireEvent.error(eventImage);
@@ -511,7 +522,7 @@ describe("MarketPicker Component", () => {
     }
   });
 
-  test("renders correct grid layout for 4 markets", () => {
+  test("renders 3-col grid for 4 markets (duplicate coverage)", () => {
     const fourMarkets = [
       ...mockOptions,
       {
@@ -524,10 +535,10 @@ describe("MarketPicker Component", () => {
     render(<MarketPicker {...defaultProps} options={fourMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
-    expect(grid).toHaveClass("grid-cols-2");
+    expect(grid).toHaveClass("grid-cols-3");
   });
 
-  test("renders correct grid layout for 5 markets", () => {
+  test("renders 3-col grid for 5 markets (duplicate coverage)", () => {
     const fiveMarkets = [
       ...mockOptions,
       {
@@ -546,12 +557,10 @@ describe("MarketPicker Component", () => {
     render(<MarketPicker {...defaultProps} options={fiveMarkets} />);
     const grid = document.querySelector("#market-options-grid");
     expect(grid).toBeInTheDocument();
-    // 5 markets uses space-y-3 with nested grids (3+2 layout)
-    // The grid itself has the space-y-3 class
-    expect(grid).toHaveClass("space-y-3");
+    expect(grid).toHaveClass("grid-cols-3");
   });
 
-  test("renders correct grid layout for 6+ markets", () => {
+  test("renders 3-col grid for 6+ markets (duplicate coverage)", () => {
     const sixMarkets = [
       ...mockOptions,
       {
