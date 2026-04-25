@@ -127,6 +127,27 @@ def test_build_market_document_links_event():
     assert doc["outcomes"] == ["Yes", "No"]
 
 
+def test_market_document_dual_writes_venue_fields():
+    event_id = ObjectId()
+    doc = build_market_document(
+        {
+            "venue": "kalshi",
+            "raw_url": "https://kalshi.com/markets/AAA-1?utm_source=x",
+            "canonical_url": "https://kalshi.com/markets/AAA-1",
+            "market_id": "AAA-1",
+            "event_id": "AAA",
+            "market": {"question": "A?"},
+            "market_snapshot": {"question": "A?"},
+        },
+        "2026-04-24T00:00:00Z",
+        event_id,
+    )
+    assert doc["venue"] == "kalshi"
+    assert doc["venue_market_id"] == "AAA-1"
+    assert doc["canonical_url"] == "https://kalshi.com/markets/AAA-1"
+    assert "polymarket_url" not in doc or doc["polymarket_url"] != ""
+
+
 def test_build_run_document_denormalizes_snapshot_and_context():
     state = _sample_state()
     event_id = ObjectId()
@@ -141,6 +162,29 @@ def test_build_run_document_denormalizes_snapshot_and_context():
     assert doc["signal"]["direction"] == "up"
     assert doc["decision"]["action"] == "BUY"
     assert doc["strategy_preset"] == "Balanced"
+
+
+def test_run_document_dual_writes_venue_fields():
+    event_oid = ObjectId()
+    market_oid = ObjectId()
+    doc = build_run_document(
+        {
+            "venue": "polymarket",
+            "raw_url": "https://polymarket.com/event/foo?utm_source=x",
+            "canonical_url": "https://polymarket.com/event/foo",
+            "market_id": "foo",
+            "event_id": "foo-event",
+            "selected_market_id": "foo",
+            "market_snapshot": {},
+            "event_context": {},
+        },
+        "2026-04-24T00:00:00Z",
+        event_oid,
+        market_oid,
+    )
+    assert doc["market_id"] == market_oid
+    assert doc["venue_market_id"] == "foo"
+    assert doc["canonical_url"] == "https://polymarket.com/event/foo"
 
 
 def test_build_trace_document():
@@ -263,6 +307,27 @@ async def test_init_run_document_async():
 
         assert isinstance(run_id, ObjectId)
         assert mock_create.called
+        run_doc = mock_create.call_args.args[0]
+        assert run_doc["venue"] == "polymarket"
+        assert run_doc["polymarket_url"] == "https://polymarket.com/market/test"
+
+
+@pytest.mark.anyio(backend="asyncio")
+async def test_init_run_document_async_omits_polymarket_url_for_kalshi():
+    """Test init_run_document_async avoids legacy Polymarket URL fields for Kalshi."""
+    with patch("app.orchestration.snapshot.create_run_async") as mock_create:
+        mock_create.return_value = ObjectId()
+
+        await init_run_document_async(
+            "test-run-id",
+            "https://kalshi.com/markets/AAA-25JAN-B1",
+            venue="kalshi",
+        )
+
+        run_doc = mock_create.call_args.args[0]
+        assert run_doc["venue"] == "kalshi"
+        assert run_doc["raw_url"] == "https://kalshi.com/markets/AAA-25JAN-B1"
+        assert "polymarket_url" not in run_doc
 
 
 @pytest.mark.anyio(backend="asyncio")

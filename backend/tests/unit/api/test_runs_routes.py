@@ -12,58 +12,24 @@ from app.main import app
 client = TestClient(app)
 
 
-@pytest.mark.anyio(backend="asyncio")
-async def test_list_runs_valid_market_id():
-    """Test /runs endpoint with valid market_id."""
-    mock_runs = [
-        {"run_id": "run-1", "market_snapshot": {}},
-        {"run_id": "run-2", "market_snapshot": {}},
-    ]
+def test_list_runs_by_market_route_removed():
+    """Ambiguous market_id query route should not be public."""
+    response = client.get("/api/runs?market_id=507f1f77bcf86cd799439011")
+    assert response.status_code == 404
 
-    with patch("app.api.routes.runs.list_runs_by_market_async") as mock_list:
+
+@pytest.mark.anyio(backend="asyncio")
+async def test_list_recent_runs_valid():
+    """Test /runs/recent endpoint."""
+    mock_runs = [{"run_id": "run-1", "market_snapshot": {}}]
+
+    with patch("app.api.routes.runs.list_recent_runs_async") as mock_list:
         mock_list.return_value = mock_runs
 
-        response = client.get("/api/runs?market_id=507f1f77bcf86cd799439011")
+        response = client.get("/api/runs/recent")
 
         assert response.status_code == 200
-        data = response.json()
-        assert "runs" in data
-        assert len(data["runs"]) == 2
-
-
-@pytest.mark.anyio(backend="asyncio")
-async def test_list_runs_invalid_market_id():
-    """Test /runs endpoint with invalid market_id (400)."""
-    with patch("app.api.routes.runs.list_runs_by_market_async") as mock_list:
-        mock_list.side_effect = ValueError("Invalid ObjectId")
-
-        response = client.get("/api/runs?market_id=invalid")
-
-        assert response.status_code == 400
-
-
-@pytest.mark.anyio(backend="asyncio")
-async def test_list_runs_database_error():
-    """Test /runs endpoint with database errors (500)."""
-    with patch("app.api.routes.runs.list_runs_by_market_async") as mock_list:
-        mock_list.side_effect = Exception("Database error")
-
-        response = client.get("/api/runs?market_id=507f1f77bcf86cd799439011")
-
-        assert response.status_code == 500
-
-
-@pytest.mark.anyio(backend="asyncio")
-async def test_list_runs_empty_results():
-    """Test /runs endpoint with empty results."""
-    with patch("app.api.routes.runs.list_runs_by_market_async") as mock_list:
-        mock_list.return_value = []
-
-        response = client.get("/api/runs?market_id=507f1f77bcf86cd799439011")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data["runs"]) == 0
+        assert response.json()["runs"] == mock_runs
 
 
 @pytest.mark.anyio(backend="asyncio")

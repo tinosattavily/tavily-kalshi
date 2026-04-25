@@ -97,13 +97,12 @@ def route_after_market(state: AgentState) -> str:
     requires_selection = state.get("requires_market_selection", False)
 
     if requires_selection:
-        # For Kalshi: check if a ticker has been selected
+        selected_market_id = state.get("selected_market_id")
         selected_ticker = state.get("selected_ticker")
-        # For Polymarket: check if a slug has been selected
         selected_slug = state.get("selected_market_slug")
 
         # If selection is required but nothing selected, pause for user input
-        if not selected_ticker and not selected_slug:
+        if not selected_market_id and not selected_ticker and not selected_slug:
             logger.info(
                 "Market selection required - pausing for user input",
                 run_id=state.get("run_id"),

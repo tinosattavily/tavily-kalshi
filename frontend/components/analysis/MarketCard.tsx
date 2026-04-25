@@ -17,13 +17,15 @@ type OrderBookLevel = {
 };
 
 type PreviousMarketOption = {
-  slug: string;
+  market_id: string;
+  slug?: string;
   question: string;
 };
 
 type MarketSnapshotProps = {
   // Event-level
   eventTitle: string;
+  venue?: "kalshi" | "polymarket";
   groupItemTitle?: string; // e.g. "50+ bps decrease"
   marketUrl: string;
   closesIn: string; // preformatted, e.g. "23 days"
@@ -31,8 +33,8 @@ type MarketSnapshotProps = {
   // Market-level
   question?: string;
   previousMarkets?: PreviousMarketOption[];
-  onMarketSelect?: (slug: string) => void;
-  activeMarketSlug?: string;
+  onMarketSelect?: (marketId: string) => void;
+  activeMarketId?: string;
 
   // Market-level prices (0–1)
   yesPrice: number;
@@ -44,9 +46,9 @@ type MarketSnapshotProps = {
   liquidity?: number;
 
   // Social / meta
-  commentCount?: number;
-  eventCommentCount?: number;
-  seriesCommentCount?: number;
+  commentCount?: number | null;
+  eventCommentCount?: number | null;
+  seriesCommentCount?: number | null;
 
   // Order-book snapshot (optional)
   bestBid?: number;
@@ -63,10 +65,26 @@ function formatUsdCompact(value: number | undefined) {
   return value.toFixed(0);
 }
 
+const VENUE_META = {
+  polymarket: {
+    name: "Polymarket",
+    favicon: "https://polymarket.com/favicon.ico",
+    volumeUnit: "USDC",
+    liquidityUnit: "USDC",
+  },
+  kalshi: {
+    name: "Kalshi",
+    favicon: "https://kalshi.com/favicon.ico",
+    volumeUnit: "contracts",
+    liquidityUnit: "OI",
+  },
+} as const;
+
 
 export function MarketCard(props: MarketSnapshotProps) {
   const {
     eventTitle,
+    venue,
     groupItemTitle,
     marketUrl,
     closesIn,
@@ -74,7 +92,7 @@ export function MarketCard(props: MarketSnapshotProps) {
     question,
     previousMarkets = [],
     onMarketSelect,
-    activeMarketSlug,
+    activeMarketId,
     yesPrice,
     noPrice,
     marketVolume,
@@ -121,6 +139,10 @@ export function MarketCard(props: MarketSnapshotProps) {
   const noPct = noPrice * 100;
   const impliedMultiplier = yesPrice > 0 ? (1 / yesPrice).toFixed(1) : "∞";
 
+  const venueMeta = VENUE_META[venue ?? "polymarket"];
+  const volumeUnit = venueMeta.volumeUnit;
+  const liquidityUnit = venueMeta.liquidityUnit;
+
   // Spread and mid-price
   const hasQuotes = typeof bestBid === "number" && typeof bestAsk === "number";
   const spread = hasQuotes ? Math.max(0, bestAsk! - bestBid!) : undefined;
@@ -147,15 +169,20 @@ export function MarketCard(props: MarketSnapshotProps) {
       {/* Header: title + chips */}
       <div className="mb-3 flex items-start justify-between gap-3 overflow-visible">
         <div className="min-w-0 overflow-visible">
-          <p className="py-2 flex items-center gap-2 text-base uppercase tracking-[0.18em] text-[#1e3a8a]">
+          <div className="py-2 flex items-center gap-2 text-base uppercase tracking-[0.18em] text-[#1e3a8a]">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48" className="text-[#1e3a8a]">
               <g fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4">
                 <path d="M44 11a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v9h40v-9ZM4.112 39.03l12.176-12.3l6.58 6.3L30.91 26l4.48 4.368"/>
                 <path d="M44 18v19a3 3 0 0 1-3 3H12m7.112-26h18M11.11 14h2M4 18v9"/>
               </g>
             </svg>
-            Market snapshot
-          </p>
+            <span>Market snapshot</span>
+            {venue && (
+              <span className="ml-1 inline-flex rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#1e3a8a]">
+                {venueMeta.name}
+              </span>
+            )}
+          </div>
           <div className="mt-1 flex items-center gap-2 pt-2 px-2">
             <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-xs uppercase tracking-[0.1em] text-[#1e3a8a]">
               EVENT:
@@ -192,27 +219,27 @@ export function MarketCard(props: MarketSnapshotProps) {
                   >
                     <ul className="max-h-60 overflow-auto">
                       {previousMarkets.map((market) => (
-                        <li key={market.slug}>
+                        <li key={market.market_id}>
                           <button
                             type="button"
                             className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-neutral-100 transition-colors ${
-                              activeMarketSlug === market.slug ? "bg-[#1e3a8a]/10" : ""
+                              activeMarketId === market.market_id ? "bg-[#1e3a8a]/10" : ""
                             }`}
                             onClick={() => {
-                              onMarketSelect?.(market.slug);
+                              onMarketSelect?.(market.market_id);
                               setIsMarketDropdownOpen(false);
                             }}
                           >
                             <span
                               className={`flex-1 line-clamp-2 ${
-                                activeMarketSlug === market.slug
+                                activeMarketId === market.market_id
                                   ? "text-[#1e3a8a] font-semibold"
                                   : "text-neutral-800"
                               }`}
                             >
                               {market.question}
                             </span>
-                            {activeMarketSlug === market.slug && (
+                            {activeMarketId === market.market_id && (
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
                                 width="20"
@@ -318,8 +345,8 @@ export function MarketCard(props: MarketSnapshotProps) {
               <p className="text-[11px] text-slate-500 font-medium">Volume (24h)</p>
               <p className="text-base font-semibold text-black">
                 {volume24h != null
-                  ? `${formatUsdCompact(volume24h)} USDC`
-                  : `${formatUsdCompact(marketVolume)} USDC`}
+                  ? `${formatUsdCompact(volume24h)} ${volumeUnit}`
+                  : `${formatUsdCompact(marketVolume)} ${volumeUnit}`}
               </p>
             </div>
           </div>
@@ -328,16 +355,18 @@ export function MarketCard(props: MarketSnapshotProps) {
             <div>
               <p className="text-[11px] text-slate-500 font-medium">Total volume</p>
               <p className="text-base font-semibold text-black">
-                {formatUsdCompact(marketVolume)} USDC
+                {formatUsdCompact(marketVolume)} {volumeUnit}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 bg-transparent p-2.5">
             <Scale className="h-3.5 w-3.5 text-purple-400" />
             <div>
-              <p className="text-[11px] text-slate-500 font-medium">Liquidity</p>
+              <p className="text-[11px] text-slate-500 font-medium">
+                {venue === "kalshi" ? "Open interest" : "Liquidity"}
+              </p>
               <p className="text-base font-semibold text-black">
-                {liquidity != null ? `${formatUsdCompact(liquidity)} USDC` : "—"}
+                {liquidity != null ? `${formatUsdCompact(liquidity)} ${liquidityUnit}` : "—"}
               </p>
             </div>
           </div>
@@ -346,19 +375,23 @@ export function MarketCard(props: MarketSnapshotProps) {
         {/* Row 2, Column 1: Order Book snapshot */}
         <div id="market-snapshot-micro" className="flex flex-col gap-1 rounded-2xl bg-transparent px-3 py-2 text-sm text-black">
         <div className="flex flex-wrap items-center gap-2">
-          {hasQuotes ? (
+          {bestBid == null && bestAsk == null && bids.length === 0 && asks.length === 0 ? (
+            <span className="text-slate-500">
+              Order book snapshot not available.
+            </span>
+          ) : (
             <>
               <span>
                 <span className="text-slate-500">Bid</span>{" "}
                 <span className="font-mono text-black">
-                  {bestBid!.toFixed(3)}
+                  {bestBid != null ? bestBid.toFixed(3) : "—"}
                 </span>
               </span>
               <span className="text-black">·</span>
               <span>
                 <span className="text-slate-500">Ask</span>{" "}
                 <span className="font-mono text-black">
-                  {bestAsk!.toFixed(3)}
+                  {bestAsk != null ? bestAsk.toFixed(3) : "—"}
                 </span>
               </span>
               {spread != null && (
@@ -378,14 +411,10 @@ export function MarketCard(props: MarketSnapshotProps) {
                 </>
               )}
             </>
-          ) : (
-            <span className="text-slate-500">
-              Order book snapshot not available.
-            </span>
           )}
         </div>
         {bids.length > 0 || asks.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 whitespace-nowrap">
             <span className="text-black">
               Depth (top 3) — bid{" "}
               <span className="font-mono text-black">
@@ -396,7 +425,7 @@ export function MarketCard(props: MarketSnapshotProps) {
                 {formatUsdCompact(askDepth)}
               </span>
             </span>
-            <span className="rounded-full bg-slate-900/80 px-2 py-0.5 text-xs uppercase tracking-[0.14em] text-slate-400">
+            <span className="shrink-0 rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-slate-300">
               {depthLabel}
             </span>
           </div>
@@ -462,16 +491,17 @@ export function MarketCard(props: MarketSnapshotProps) {
           className="group rounded-lg bg-white/90 px-2 py-1.5 flex items-center gap-1.5 hover:bg-white transition-colors"
         >
           <img
-            src="https://kalshi.com/favicon.ico"
-            alt="Kalshi"
+            src={venueMeta.favicon}
+            alt={venueMeta.name}
             className="h-4 w-4 object-contain"
             onError={(e) => {
-              // Hide image if it fails to load
               const img = e.currentTarget as HTMLImageElement;
               img.style.display = "none";
             }}
           />
-          <span className="text-[10px] text-slate-700 font-medium group-hover:text-[#1e3a8a] transition-colors">Kalshi</span>
+          <span className="text-[10px] text-slate-700 font-medium group-hover:text-[#1e3a8a] transition-colors">
+            {venueMeta.name}
+          </span>
           <ArrowUpRight className="h-3 w-3 text-slate-500 group-hover:text-[#1e3a8a] transition-colors" />
         </a>
       </div>

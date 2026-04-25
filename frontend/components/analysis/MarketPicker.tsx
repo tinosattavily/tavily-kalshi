@@ -1,8 +1,13 @@
 import React from "react";
 
 type MarketOption = {
-  slug: string;
+  slug?: string;
+  id?: string;
+  market_id?: string;
+  venue?: "kalshi" | "polymarket";
+  label?: string;
   question?: string;
+  title?: string;
   image?: string;
   best_bid?: number;
   best_ask?: number;
@@ -24,7 +29,7 @@ type Props = {
   options: MarketOption[];
   eventContext?: EventContext | null;
   isSubmitting: boolean;
-  onSelect: (slug: string) => void;
+  onSelect: (marketId: string) => void;
   onSortedOptionsChange?: (options: MarketOption[]) => void;
 };
 
@@ -146,16 +151,23 @@ export default function MarketSelection({
     });
   }, [hoveredIndex, sortedOptions]);
 
-  const MarketButton = (m: MarketOption, index: number) => (
+  const getMarketId = (m: MarketOption) => String(m.market_id ?? m.slug ?? m.id ?? "");
+  const getMarketLabel = (m: MarketOption) =>
+    m.label || m.question || m.title || m.slug || m.market_id || "Market";
+
+  const MarketButton = (m: MarketOption, index: number) => {
+    const marketId = getMarketId(m);
+    const marketLabel = getMarketLabel(m);
+    return (
     <button
-      id={`market-option-${m.slug}`}
-      key={m.slug}
+      id={`market-option-${marketId}`}
+      key={marketId}
       ref={(el) => {
         buttonRefs.current[index] = el;
       }}
       type="button"
       disabled={isSubmitting}
-      onClick={() => onSelect(m.slug)}
+      onClick={() => onSelect(marketId)}
       onMouseEnter={() => setHoveredIndex(index)}
       className="text-left rounded-xl border border-transparent transition-all duration-300 ease-in-out p-4 bg-white/30 backdrop-blur-sm disabled:opacity-50 relative"
       style={{ WebkitBackdropFilter: "blur(8px)", zIndex: 1 }}
@@ -164,7 +176,7 @@ export default function MarketSelection({
         {m.image ? (
           <img
             src={m.image}
-            alt={m.question || "Market"}
+            alt={marketLabel}
             width={40}
             height={40}
             className="rounded-md border border-white/70 w-10 h-10 object-cover"
@@ -175,7 +187,7 @@ export default function MarketSelection({
         ) : null}
         <div className="flex-1">
           <div className="font-medium text-neutral-900 line-clamp-2">
-            {m.question || m.slug}
+            {marketLabel}
           </div>
           <div className="mt-1 text-xs text-neutral-600">
             {(m.best_bid || m.best_ask) ? (
@@ -186,7 +198,8 @@ export default function MarketSelection({
           </div>
         </div>
     </button>
-  );
+    );
+  };
 
   const SingleRow = (n: number) => {
     const colClass = n === 1 ? "grid-cols-1" : n === 2 ? "grid-cols-2" : "grid-cols-3";
@@ -233,7 +246,7 @@ export default function MarketSelection({
               {eventContext?.title || "Event"}
             </div>
             <div className="text-xs text-neutral-600 leading-none">
-              {count === 1 ? (options[0]?.question || "Selected market") : "Select a market"}
+              {count === 1 ? getMarketLabel(options[0] || {}) : "Select a market"}
             </div>
           </div>
         {/* Sort dropdown */}

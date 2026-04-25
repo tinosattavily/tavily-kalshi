@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.domains.news.query_generator import (
+    build_query_cache_key,
     build_prompt_from_context,
     generate_search_queries,
     parse_tavily_specs,
@@ -172,6 +173,12 @@ def test_build_prompt_from_state_missing_fields():
     assert "Market snapshot:" in prompt
     assert "Analysis horizon:" in prompt
     assert "Strategy preset:" in prompt
+
+
+def test_query_cache_key_includes_venue():
+    kalshi = build_query_cache_key("kalshi", "AAA", "event", "prompt", "24h", "Balanced")
+    poly = build_query_cache_key("polymarket", "AAA", "event", "prompt", "24h", "Balanced")
+    assert kalshi != poly
 
 
 def test_build_prompt_from_state_various_configurations():

@@ -8,8 +8,8 @@ interface UseAnalysisPollingOptions {
   runId: string | null;
   onStatusUpdate: (status: RunStatus) => void;
   onResultsUpdate: (updater: (prev: AnalysisResults | null) => AnalysisResults | null) => void;
-  onMarketSelectionRequired: (marketOptions: Array<{ slug?: string; question?: string }>) => void;
-  onComplete: (marketSlug?: string) => void;
+  onMarketSelectionRequired: (marketOptions: Array<{ market_id?: string; slug?: string; question?: string }>) => void;
+  onComplete: (marketId?: string) => void;
   onRefreshTrigger: () => void;
 }
 
@@ -193,7 +193,7 @@ export function useAnalysisPolling({
 
           if (allDoneOrError) {
             pollingRef.current = false;
-            onComplete(run.market_snapshot?.slug);
+            onComplete(run.selected_market_id || run.venue_market_id || run.market_snapshot?.market_id || run.market_snapshot?.slug);
             onRefreshTrigger();
           } else {
             window.setTimeout(poll, 1500);

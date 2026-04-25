@@ -9,7 +9,10 @@ interface RecentRun {
   _id?: string;
   market_url?: string;
   polymarket_url?: string;
+  selected_market_id?: string;
+  venue_market_id?: string;
   market_snapshot?: {
+    market_id?: string;
     slug?: string;
     [key: string]: unknown;
   };
@@ -33,7 +36,7 @@ interface UseRecentRunsOptions {
   setResults: (results: AnalysisResults | null) => void;
   setRunStatus: (status: RunStatus | null) => void;
   setUrl: (url: string) => void;
-  setSelectedMarketSlug: (slug: string | null) => void;
+  setSelectedMarketId: (marketId: string | null) => void;
   stopPolling: () => void;
   runIdRef: MutableRefObject<string | null>;
   showToast: (message: string, type: "error" | "success" | "info" | "warning") => void;
@@ -53,7 +56,7 @@ export function useRecentRuns({
   setResults,
   setRunStatus,
   setUrl,
-  setSelectedMarketSlug,
+  setSelectedMarketId,
   stopPolling,
   runIdRef,
   showToast,
@@ -111,8 +114,9 @@ export function useRecentRuns({
       setResults(mappedResults);
       setUrl(savedRun.market_url || savedRun.polymarket_url || "");
 
-      if (savedRun.market_snapshot?.slug) {
-        setSelectedMarketSlug(savedRun.market_snapshot.slug);
+      const selectedMarketId = savedRun.selected_market_id || savedRun.venue_market_id || savedRun.market_snapshot?.market_id || savedRun.market_snapshot?.slug;
+      if (selectedMarketId) {
+        setSelectedMarketId(String(selectedMarketId));
       }
     } catch (error) {
       logger.error("Error loading saved run:", error);
@@ -121,7 +125,7 @@ export function useRecentRuns({
         "error"
       );
     }
-  }, [setSelectedRunId, setIsSubmitting, stopPolling, setRunId, runIdRef, setResults, setRunStatus, setUrl, setSelectedMarketSlug, showToast]);
+  }, [setSelectedRunId, setIsSubmitting, stopPolling, setRunId, runIdRef, setResults, setRunStatus, setUrl, setSelectedMarketId, showToast]);
 
   return {
     handleRunSelect,

@@ -42,6 +42,8 @@ export interface OrderBook {
 
 /** Market snapshot data from Kalshi API. */
 export interface MarketSnapshot {
+  venue?: "kalshi" | "polymarket";
+  market_id?: string;
   question?: string;
   url?: string;
   slug?: string;
@@ -79,7 +81,18 @@ export interface EventContext {
 
 /** Market option for selection. */
 export interface MarketOption {
+  venue?: "kalshi" | "polymarket";
+  market_id?: string;
+  label?: string;
   slug?: string;
   question?: string;
+  title?: string;
   id?: string;
+  best_bid?: number;
+  best_ask?: number;
+  liquidity?: number;
+  volume?: number;
+  volume24hr?: number;
+  end_date?: string;
+  image?: string;
 }

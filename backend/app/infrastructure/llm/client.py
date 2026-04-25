@@ -9,6 +9,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from app.config import get_logger, settings
+from app.domains.markets.adapters.base import Venue
 from app.infrastructure.http.cache import openai_cache
 from app.infrastructure.http.resilience import openai_circuit
 
@@ -18,6 +19,22 @@ try:
     import openai
 except ImportError:  # pragma: no cover - handled at runtime
     openai = None  # type: ignore[assignment]
+
+
+def build_signal_cache_key(
+    venue: Venue,
+    market_id: str,
+    event_title: str,
+    market_question: str,
+    yes_price: float,
+    news_summary: str,
+    top_headlines: str,
+) -> str:
+    cache_input = (
+        f"{venue}:{market_id}:{event_title}:{market_question}:"
+        f"{yes_price:.4f}:{news_summary[:200]}:{top_headlines[:200]}"
+    )
+    return f"openai:{hashlib.md5(cache_input.encode()).hexdigest()}"
 
 
 class OpenAIClient:
@@ -52,6 +69,8 @@ class OpenAIClient:
         news_summary: str,
         top_headlines: str,
         tag_label: str = "",
+        venue: Venue = "polymarket",
+        market_id: str = "unknown-market",
     ) -> Dict[str, Any]:
         """Generate a trading signal using OpenAI.
 
@@ -78,7 +97,7 @@ class OpenAIClient:
 
         system_msg = (
             "You are a careful prediction market analyst. "
-            "Given a Polymarket market, its current YES price and recent news, "
+            "Given a prediction market, its current YES price and recent news, "
             "you estimate the TRUE probability that YES is correct over the next few days. "
             "You must respond ONLY with a single JSON object."
         )
@@ -88,7 +107,7 @@ Event: {event_title}
 Market: {market_question}
 Bracket / label: {tag_label}
 
-Current Polymarket YES price: {yes_price:.4f}
+Current market YES price: {yes_price:.4f}
 Implied market probability: {yes_price * 100:.2f}%
 
 Summary of recent news (from Tavily):
@@ -115,11 +134,15 @@ Return a JSON object with the following keys:
 """
 
         # Create cache key from input parameters
-        cache_input = (
-            f"{event_title}:{market_question}:{yes_price:.4f}:"
-            f"{news_summary[:200]}:{top_headlines[:200]}"
+        cache_key = build_signal_cache_key(
+            venue,
+            market_id,
+            event_title,
+            market_question,
+            yes_price,
+            news_summary,
+            top_headlines,
         )
-        cache_key = f"openai:{hashlib.md5(cache_input.encode()).hexdigest()}"
 
         # Try cache first
         cached_result = openai_cache.get(cache_key)
@@ -177,6 +200,8 @@ Return a JSON object with the following keys:
         news_summary: str,
         top_headlines: str,
         tag_label: str = "",
+        venue: Venue = "polymarket",
+        market_id: str = "unknown-market",
     ) -> Dict[str, Any]:
         """Generate a trading signal using OpenAI (async wrapper).
 
@@ -208,6 +233,8 @@ Return a JSON object with the following keys:
             news_summary,
             top_headlines,
             tag_label,
+            venue,
+            market_id,
         )
 
     def _summarize_news_with_sentiment_sync(

@@ -14,7 +14,6 @@ from app.infrastructure.database.repositories import (
     ensure_indexes_async,
     events_collection_async,
     get_run_async,
-    list_runs_by_market_async,
     markets_collection_async,
     runs_collection_async,
     traces_collection_async,
@@ -110,6 +109,15 @@ async def test_ensure_indexes_async():
         assert mock_markets_coll.create_index.called
         assert mock_runs_coll.create_index.called
         assert mock_traces_coll.create_index.called
+        mock_markets_coll.create_index.assert_any_call(
+            "polymarket_url",
+            unique=True,
+            partialFilterExpression={"polymarket_url": {"$exists": True, "$type": "string"}},
+        )
+        mock_markets_coll.create_index.assert_any_call(
+            [("venue", 1), ("venue_market_id", 1)],
+            unique=True,
+        )
 
 
 @pytest.mark.anyio(backend="asyncio")
@@ -133,6 +141,31 @@ async def test_upsert_event_async():
 
         assert result["slug"] == "test-event"
         assert mock_coll.find_one_and_update.called
+
+
+@pytest.mark.anyio(backend="asyncio")
+async def test_upsert_event_async_prefers_venue_identity():
+    """Test upsert_event_async uses venue-native identity when available."""
+    event_doc = {
+        "slug": "AAA-25JAN",
+        "venue": "kalshi",
+        "venue_event_id": "AAA-25JAN",
+        "title": "Test Event",
+    }
+
+    with patch(
+        "app.infrastructure.database.repositories.events_collection_async"
+    ) as mock_collection:
+        mock_coll = AsyncMock()
+        mock_coll.find_one_and_update = AsyncMock(return_value={**event_doc, "_id": ObjectId()})
+        mock_collection.return_value = mock_coll
+
+        await upsert_event_async(event_doc)
+
+        assert mock_coll.find_one_and_update.call_args.args[0] == {
+            "venue": "kalshi",
+            "venue_event_id": "AAA-25JAN",
+        }
 
 
 @pytest.mark.anyio(backend="asyncio")
@@ -167,6 +200,31 @@ async def test_upsert_market_async():
 
         assert result["slug"] == "test-market"
         assert mock_coll.find_one_and_update.called
+
+
+@pytest.mark.anyio(backend="asyncio")
+async def test_upsert_market_async_prefers_venue_identity():
+    """Test upsert_market_async uses venue-native identity when available."""
+    market_doc = {
+        "slug": "AAA-25JAN-B1",
+        "venue": "kalshi",
+        "venue_market_id": "AAA-25JAN-B1",
+        "question": "Test?",
+    }
+
+    with patch(
+        "app.infrastructure.database.repositories.markets_collection_async"
+    ) as mock_collection:
+        mock_coll = AsyncMock()
+        mock_coll.find_one_and_update = AsyncMock(return_value={**market_doc, "_id": ObjectId()})
+        mock_collection.return_value = mock_coll
+
+        await upsert_market_async(market_doc)
+
+        assert mock_coll.find_one_and_update.call_args.args[0] == {
+            "venue": "kalshi",
+            "venue_market_id": "AAA-25JAN-B1",
+        }
 
 
 @pytest.mark.anyio(backend="asyncio")
@@ -276,81 +334,3 @@ async def test_get_run_async_invalid_id():
             await get_run_async("invalid-id")
 
 
-@pytest.mark.anyio(backend="asyncio")
-async def test_list_runs_by_market_async():
-    """Test list_runs_by_market_async multiple runs."""
-    market_id = "507f1f77bcf86cd799439011"
-    mock_runs = [
-        {"run_id": "run-1", "market_id": ObjectId(market_id)},
-        {"run_id": "run-2", "market_id": ObjectId(market_id)},
-    ]
-
-    with patch("app.infrastructure.database.repositories.runs_collection_async") as mock_collection:
-        mock_coll = AsyncMock()
-
-        # Create an async iterator class for the cursor
-        class AsyncIterator:
-            def __init__(self, items):
-                self.items = items
-                self.index = 0
-
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                if self.index >= len(self.items):
-                    raise StopAsyncIteration
-                item = self.items[self.index]
-                self.index += 1
-                return item
-
-        # Create iterator instance
-        iterator = AsyncIterator(mock_runs)
-        mock_cursor = MagicMock()
-        # __aiter__ should return the iterator when called
-        mock_cursor.__aiter__ = MagicMock(return_value=iterator)
-        mock_cursor.sort = MagicMock(return_value=mock_cursor)
-        mock_coll.find = MagicMock(return_value=mock_cursor)
-        mock_collection.return_value = mock_coll
-
-        result = await list_runs_by_market_async(market_id)
-
-        assert len(result) == 2
-        assert result[0]["run_id"] == "run-1"
-
-
-@pytest.mark.anyio(backend="asyncio")
-async def test_list_runs_by_market_async_empty():
-    """Test list_runs_by_market_async empty results."""
-    market_id = "507f1f77bcf86cd799439011"
-
-    with patch("app.infrastructure.database.repositories.runs_collection_async") as mock_collection:
-        mock_coll = AsyncMock()
-
-        # Create an empty async iterator class for the cursor
-        class AsyncIterator:
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                raise StopAsyncIteration
-
-        # Create iterator instance
-        iterator = AsyncIterator()
-        mock_cursor = MagicMock()
-        # __aiter__ should return the iterator when called
-        mock_cursor.__aiter__ = MagicMock(return_value=iterator)
-        mock_cursor.sort = MagicMock(return_value=mock_cursor)
-        mock_coll.find = MagicMock(return_value=mock_cursor)
-        mock_collection.return_value = mock_coll
-
-        result = await list_runs_by_market_async(market_id)
-
-        assert len(result) == 0
-
-
-@pytest.mark.anyio(backend="asyncio")
-async def test_list_runs_by_market_async_invalid_id():
-    """Test list_runs_by_market_async with invalid market_id."""
-    with pytest.raises(ValueError):
-        await list_runs_by_market_async("invalid-id")

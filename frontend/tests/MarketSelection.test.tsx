@@ -86,6 +86,18 @@ describe("MarketPicker Component", () => {
     expect(defaultProps.onSelect).toHaveBeenCalledWith("market-1");
   });
 
+  test("uses market_id when slug is absent", async () => {
+    const user = userEvent.setup();
+    const onSelect = jest.fn();
+    const options = [{ venue: "kalshi" as const, market_id: "AAA-1", label: "A" }];
+
+    render(<MarketPicker {...defaultProps} options={options} onSelect={onSelect} />);
+
+    expect(screen.getAllByText("A").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: /^A$/i }));
+    expect(onSelect).toHaveBeenCalledWith("AAA-1");
+  });
+
   test("disables buttons when isSubmitting is true", () => {
     render(<MarketPicker {...defaultProps} isSubmitting={true} />);
     const buttons = screen.getAllByRole("button");

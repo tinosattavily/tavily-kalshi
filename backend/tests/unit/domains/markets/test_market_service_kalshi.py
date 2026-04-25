@@ -56,7 +56,7 @@ class TestGetKalshiMarketFromUrl:
 
         with pytest.raises(ValueError, match="Event URL requires market selection"):
             await service.get_kalshi_market_from_url(
-                "https://kalshi.com/events/TEST-EVENT"
+                "https://kalshi.com/events/TEST-25EVENT"
             )
 
 

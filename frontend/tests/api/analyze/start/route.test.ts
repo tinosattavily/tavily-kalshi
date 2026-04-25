@@ -34,7 +34,11 @@ describe("POST /api/analyze/start", () => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
     delete process.env.BACKEND_URL;
-    process.env.NODE_ENV = "development";
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "development",
+      writable: true,
+      configurable: true,
+    });
   });
 
   afterEach(() => {

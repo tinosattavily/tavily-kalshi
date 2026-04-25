@@ -68,10 +68,17 @@ class ValidationError(ProphilyError):
     pass
 
 
-class MarketSelectionRequiredError(ProphilyError):
-    """Raised when user must select a market from multiple options."""
+class UnsupportedVenueError(ValidationError):
+    """Raised when URL host is not supported."""
 
-    def __init__(self, market_options: list, event_context: dict):
-        self.market_options = market_options
-        self.event_context = event_context
-        super().__init__("Market selection required")
+
+class VenueUrlParseError(ValidationError):
+    """Raised when a supported venue URL cannot be parsed."""
+
+
+class MarketNotFoundError(ExternalAPIError):
+    """Raised when a venue market cannot be found."""
+
+
+class EventNotFoundError(ExternalAPIError):
+    """Raised when a venue event cannot be found."""

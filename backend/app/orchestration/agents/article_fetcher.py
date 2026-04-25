@@ -73,7 +73,8 @@ async def run_article_fetcher(state: AgentState) -> AgentState:
     articles_for_context = deduped[:max_articles]
 
     market_question = market_snapshot.get("question") or ""
-    yes_price = float(market_snapshot.get("yes_price", 0.5))
+    yes_price_raw = market_snapshot.get("yes_price")
+    yes_price = float(yes_price_raw) if yes_price_raw is not None else 0.5
     outcomes = market_snapshot.get("outcomes") or ["Yes", "No"]
     signal_direction = state.get("signal", {}).get("direction")
 

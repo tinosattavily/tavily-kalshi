@@ -9,6 +9,7 @@ import json
 from typing import Any, Dict, List, Literal, Optional, TypedDict
 
 from app.config import get_logger
+from app.domains.markets.adapters.base import Venue
 from app.infrastructure.llm import get_openai_client
 
 logger = get_logger(__name__)
@@ -32,7 +33,7 @@ class TavilyQuerySpec(TypedDict, total=False):
 
 SYSTEM_PROMPT = """You are a research director for a prediction-market analysis system.
 
-Your job: turn a Polymarket market description into 1–3 structured web search
+Your job: turn a prediction-market description into 1–3 structured web search
 queries for Tavily that help determine the TRUE probability of the YES outcome.
 
 Constraints:
@@ -52,6 +53,18 @@ Each query object must have:
 - "timeframe" (optional; "24h" / "7d" / "30d" or empty string)
 
 Only output valid JSON. No extra text or prose."""
+
+
+def build_query_cache_key(
+    venue: Venue,
+    market_id: str,
+    event_id: str,
+    user_prompt: str,
+    horizon: str,
+    strategy_preset: str,
+) -> str:
+    cache_input = f"{venue}:{market_id}:{event_id}:{user_prompt}:{horizon}:{strategy_preset}"
+    return f"openai:tavily_queries:{hashlib.md5(cache_input.encode()).hexdigest()}"
 
 
 def build_prompt_from_context(
@@ -251,8 +264,16 @@ async def generate_search_queries(
 
     # Create cache key
     event_slug = (event_data or {}).get("slug", "")
-    cache_input = f"{SYSTEM_PROMPT}:{user_prompt}:{horizon}:{slug}:{event_slug}:{strategy_preset}"
-    cache_key = f"openai:tavily_queries:{hashlib.md5(cache_input.encode()).hexdigest()}"
+    venue = market_snapshot.get("venue") or event_context.get("venue") or "polymarket"
+    market_id = market_snapshot.get("market_id") or slug
+    cache_key = build_query_cache_key(
+        venue,
+        market_id,
+        event_slug,
+        user_prompt,
+        horizon,
+        strategy_preset,
+    )
 
     # Try cache first
     cached_result = openai_cache.get(cache_key)

@@ -49,11 +49,21 @@ class Settings:
     kalshi_env: str = os.getenv("KALSHI_ENV", "demo")
 
     @property
-    def kalshi_base_url(self) -> str:
-        """Get Kalshi API base URL based on environment."""
+    def kalshi_public_base_url(self) -> str:
+        """Get Kalshi API base URL for public read endpoints."""
+        return KalshiAPI.PUBLIC_BASE
+
+    @property
+    def kalshi_authenticated_base_url(self) -> str:
+        """Get Kalshi API base URL for authenticated requests."""
         if self.kalshi_env == "production":
-            return KalshiAPI.PROD_BASE
-        return KalshiAPI.DEMO_BASE
+            return KalshiAPI.PROD_AUTH_BASE
+        return KalshiAPI.DEMO_AUTH_BASE
+
+    @property
+    def kalshi_base_url(self) -> str:
+        """Backward-compatible authenticated Kalshi API base URL."""
+        return self.kalshi_authenticated_base_url
 
 
 settings = Settings()

@@ -5,46 +5,29 @@ from __future__ import annotations
 from app.api.schemas.requests import AnalyzeRequest
 from app.config import get_logger
 from app.orchestration.graph import run_analysis_graph
+from app.orchestration.initial_state import build_initial_state
 from app.orchestration.snapshot import (
     persist_run_snapshot_async,
     update_run_phase_async,
     update_run_with_event_and_market_async,
 )
-from app.orchestration.state import AgentState
 
 logger = get_logger(__name__)
+
+
+def _clear_structlog_context() -> None:
+    try:
+        import structlog
+    except ImportError:
+        return
+    structlog.contextvars.clear_contextvars()
 
 
 async def run_analysis_for_run_id(run_id: str, req: AnalyzeRequest) -> None:
     """Run the analysis graph in phases, updating the run document as each phase completes."""
     try:
-        # Initialize state
-        config = req.configuration
-        # Merge config min_confidence into strategy_params if provided
-        strategy_params = req.strategy_params or {}
-        if config and config.min_confidence:
-            strategy_params = {**strategy_params, "min_confidence": config.min_confidence}
-
-        state: AgentState = {
-            "run_id": run_id,
-            "market_url": str(req.market_url),
-            "polymarket_url": str(req.market_url),
-            "selected_market_slug": req.selected_market_slug,
-            "horizon": req.horizon or "24h",
-            "strategy_preset": req.strategy_preset or "Balanced",
-            "strategy_params": strategy_params,
-            # Configuration options
-            "config": {
-                "use_tavily_prompt_agent": config.use_tavily_prompt_agent if config else True,
-                "use_news_summary_agent": config.use_news_summary_agent if config else True,
-                "max_articles": config.max_articles if config else 15,
-                "max_articles_per_query": config.max_articles_per_query if config else 8,
-                "min_confidence": config.min_confidence if config else "medium",
-                "enable_sentiment_analysis": config.enable_sentiment_analysis if config else True,
-            }
-            if config
-            else {},
-        }
+        _clear_structlog_context()
+        state = build_initial_state(req, run_id=run_id)
 
         logger.info("Starting phased analysis with LangGraph", run_id=run_id)
 
