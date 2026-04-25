@@ -1,12 +1,19 @@
 import type { ReactNode } from "react";
-import { Inter } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 
 import "../app/globals.css";
 import { Providers } from "../components/Providers";
 
-const inter = Inter({
+const geistSans = Geist({
   subsets: ["latin"],
   display: "swap",
+  variable: "--font-geist-sans",
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-mono",
 });
 
 export const metadata = {
@@ -16,12 +23,10 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" data-theme="atelier" suppressHydrationWarning>
+      <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <Providers>{children}</Providers>
       </body>
     </html>
   );
 }
-
-
