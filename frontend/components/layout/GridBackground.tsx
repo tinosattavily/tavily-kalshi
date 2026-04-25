@@ -1,20 +1,25 @@
 import React from "react";
 
-export default function GridAndNoise() {
+/**
+ * Page-level decorative background. The active theme's --bg-image
+ * (set in globals.css) renders on <body>; this component layers a
+ * subtle hairline grid on top using --line for the stroke color so
+ * it works in both Atelier and Obsidian themes.
+ */
+export default function GridBackground() {
+  const stroke = "var(--line)";
+  const svg = `<svg width="120" height="120" xmlns="http://www.w3.org/2000/svg"><path d="M120 0H0v120" fill="none" stroke="${stroke}" stroke-width="1"/></svg>`;
+  const url = `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+
   return (
-    <>
-      {/* Background image */}
-      <div
-        className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: "url('/tavily_landscapes_edited_11.webp')",
-          opacity: 0.7,
-        }}
-      />
-      <div className="pointer-events-none fixed inset-0 z-0 bg-grid opacity-40" />
-      <div className="pointer-events-none fixed inset-0 z-0 bg-noise opacity-20" />
-    </>
+    <div
+      aria-hidden
+      className="pointer-events-none fixed inset-0 z-0"
+      style={{
+        backgroundImage: url,
+        backgroundSize: "120px 120px",
+      }}
+    />
   );
 }
-
 
