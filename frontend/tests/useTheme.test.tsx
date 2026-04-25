@@ -49,6 +49,8 @@ describe("useTheme", () => {
   });
 
   it("after setTheme, system preference changes are ignored", () => {
+    const originalMatchMedia = (window as Window & typeof globalThis).matchMedia;
+
     let mqlListener: ((e: MediaQueryListEvent) => void) | null = null;
     const matchMedia = jest.fn().mockImplementation((q: string) => ({
       matches: false,
@@ -60,15 +62,25 @@ describe("useTheme", () => {
       onchange: null,
       dispatchEvent: jest.fn(),
     }));
-    Object.defineProperty(window, "matchMedia", { writable: true, value: matchMedia });
+    Object.defineProperty(window, "matchMedia", { writable: true, configurable: true, value: matchMedia });
 
-    const { result } = renderHook(() => useTheme());
-    act(() => result.current.setTheme("atelier"));
+    try {
+      const { result } = renderHook(() => useTheme());
+      act(() => result.current.setTheme("atelier"));
 
-    act(() => {
-      if (mqlListener) mqlListener({ matches: true } as MediaQueryListEvent);
-    });
+      act(() => {
+        if (mqlListener) mqlListener({ matches: true } as MediaQueryListEvent);
+      });
 
-    expect(result.current.theme).toBe("atelier");
+      expect(result.current.theme).toBe("atelier");
+    } finally {
+      if (typeof originalMatchMedia === "undefined") {
+        // jsdom default — restore the pre-test absence
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        delete (window as any).matchMedia;
+      } else {
+        Object.defineProperty(window, "matchMedia", { writable: true, configurable: true, value: originalMatchMedia });
+      }
+    }
   });
 });

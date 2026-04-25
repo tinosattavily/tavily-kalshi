@@ -39,8 +39,18 @@ export function useTheme(): {
   }, []);
 
   const toggle = useCallback(() => {
-    setTheme(theme === "atelier" ? "obsidian" : "atelier");
-  }, [setTheme, theme]);
+    setThemeState((prev) => {
+      const next: Theme = prev === "atelier" ? "obsidian" : "atelier";
+      applyTheme(next);
+      writeCookie(next);
+      try {
+        window.localStorage?.setItem(USER_OVERRIDE_FLAG, "1");
+      } catch (_e) {
+        // localStorage may be unavailable; cookie is still authoritative.
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
