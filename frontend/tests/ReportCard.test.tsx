@@ -1,12 +1,21 @@
 /** @jest-environment jsdom */
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import ReportCard from "../components/analysis/ReportCard";
+import type { Signal } from "../types/signal";
 
 describe("ReportCard Component", () => {
   const mockEventContext = {
     title: "Test Event",
-    image: "https://example.com/event.jpg",
+    url: "https://example.com/event",
+  };
+
+  const mockSignal: Signal = {
+    market_prob: 0.45,
+    model_prob: 0.62,
+    edge_pct: 17,
+    recommended_action: "BUY_YES",
+    confidence_level: "high",
   };
 
   test("renders structured report with headline", () => {
@@ -15,7 +24,6 @@ describe("ReportCard Component", () => {
       thesis: "Test thesis",
     };
     render(<ReportCard report={report} eventContext={mockEventContext} />);
-    expect(screen.getByText("Report & Thesis")).toBeInTheDocument();
     expect(screen.getByText("Test Headline")).toBeInTheDocument();
     expect(screen.getByText("Test thesis")).toBeInTheDocument();
   });
@@ -28,8 +36,8 @@ describe("ReportCard Component", () => {
       bear_case: ["Bear point 1", "Bear point 2"],
     };
     render(<ReportCard report={report} />);
-    expect(screen.getByText("Bull Case")).toBeInTheDocument();
-    expect(screen.getByText("Bear Case")).toBeInTheDocument();
+    expect(screen.getByText("BULL CASE")).toBeInTheDocument();
+    expect(screen.getByText("BEAR CASE")).toBeInTheDocument();
     expect(screen.getByText("Bull point 1")).toBeInTheDocument();
     expect(screen.getByText("Bull point 2")).toBeInTheDocument();
     expect(screen.getByText("Bear point 1")).toBeInTheDocument();
@@ -42,7 +50,7 @@ describe("ReportCard Component", () => {
       key_risks: ["Risk 1", "Risk 2", "Risk 3"],
     };
     render(<ReportCard report={report} />);
-    expect(screen.getByText("Key Risks")).toBeInTheDocument();
+    expect(screen.getByText("KEY RISKS")).toBeInTheDocument();
     expect(screen.getByText("Risk 1")).toBeInTheDocument();
     expect(screen.getByText("Risk 2")).toBeInTheDocument();
     expect(screen.getByText("Risk 3")).toBeInTheDocument();
@@ -51,11 +59,12 @@ describe("ReportCard Component", () => {
   test("renders structured report with execution_notes", () => {
     const report = {
       headline: "Test Headline",
-      execution_notes: "Execution notes here",
+      execution_notes: ["Execution note one", "Execution note two"],
     };
     render(<ReportCard report={report} />);
-    expect(screen.getByText("Execution Notes")).toBeInTheDocument();
-    expect(screen.getByText("Execution notes here")).toBeInTheDocument();
+    expect(screen.getByText("EXECUTION NOTES")).toBeInTheDocument();
+    expect(screen.getByText("Execution note one")).toBeInTheDocument();
+    expect(screen.getByText("Execution note two")).toBeInTheDocument();
   });
 
   test("renders complete structured report", () => {
@@ -65,7 +74,7 @@ describe("ReportCard Component", () => {
       bull_case: ["Bull 1", "Bull 2"],
       bear_case: ["Bear 1"],
       key_risks: ["Risk 1"],
-      execution_notes: "Notes",
+      execution_notes: ["Notes"],
     };
     render(<ReportCard report={report} />);
     expect(screen.getByText("Complete Report")).toBeInTheDocument();
@@ -76,60 +85,64 @@ describe("ReportCard Component", () => {
     expect(screen.getByText("Notes")).toBeInTheDocument();
   });
 
-  test("renders legacy markdown report", () => {
-    const report = {
-      markdown: "# Legacy Report\n\nThis is markdown content.",
-    };
-    render(<ReportCard report={report} />);
-    expect(screen.getByText(/# Legacy Report/)).toBeInTheDocument();
-    expect(screen.getByText(/This is markdown content\./)).toBeInTheDocument();
-  });
-
-  test("renders string report", () => {
+  test("renders string report in fallback panel", () => {
     const report = "Simple string report";
     render(<ReportCard report={report} />);
     expect(screen.getByText("Simple string report")).toBeInTheDocument();
   });
 
-  test("renders JSON fallback for unknown object structure", () => {
+  test("renders fallback message for non-structured object", () => {
+    // Arrays are not considered structured by the new component
+    const report = ["unexpected", "array"] as unknown as Parameters<typeof ReportCard>[0]["report"];
+    render(<ReportCard report={report} />);
+    expect(screen.getByText("No structured report available.")).toBeInTheDocument();
+  });
+
+  test("renders EdgeBar when signal is provided", () => {
     const report = {
-      unknownField: "value",
-      anotherField: 123,
+      headline: "With Signal",
+    };
+    render(<ReportCard report={report} signal={mockSignal} />);
+    // EdgeBar emits the MARKET / MODEL labels with percentages
+    expect(screen.getByText(/MARKET\s+45%/)).toBeInTheDocument();
+    expect(screen.getByText(/MODEL\s+62%/)).toBeInTheDocument();
+  });
+
+  test("does not render EdgeBar when signal is null", () => {
+    const report = {
+      headline: "No Signal",
+    };
+    render(<ReportCard report={report} signal={null} />);
+    expect(screen.queryByText(/MARKET\s+\d+%/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/MODEL\s+\d+%/)).not.toBeInTheDocument();
+  });
+
+  test("does not render EdgeBar when signal is undefined", () => {
+    const report = {
+      headline: "No Signal",
     };
     render(<ReportCard report={report} />);
-    const jsonContent = JSON.stringify(report, null, 2);
-    expect(screen.getByText(new RegExp(jsonContent.split("\n")[0]))).toBeInTheDocument();
+    expect(screen.queryByText(/MARKET\s+\d+%/)).not.toBeInTheDocument();
   });
 
-  test("renders event context image when available", () => {
+  test("renders signal hero with MODEL OUTPUT label", () => {
     const report = {
-      headline: "Test Headline",
+      headline: "Hero Headline",
     };
-    render(<ReportCard report={report} eventContext={mockEventContext} />);
-    const image = screen.getByAltText("Test Event");
-    expect(image).toBeInTheDocument();
-    expect(image).toHaveAttribute("src", "https://example.com/event.jpg");
+    render(<ReportCard report={report} signal={mockSignal} />);
+    expect(screen.getByText("MODEL OUTPUT")).toBeInTheDocument();
+    expect(screen.getByText("Hero Headline")).toBeInTheDocument();
   });
 
-  test("does not render event context image when missing", () => {
+  test("renders fallback hero text when headline is missing but signal provided", () => {
     const report = {
-      headline: "Test Headline",
+      thesis: "Just thesis",
     };
-    render(<ReportCard report={report} eventContext={{ title: "Test" }} />);
-    expect(screen.queryByAltText("Event image")).not.toBeInTheDocument();
+    render(<ReportCard report={report} signal={mockSignal} />);
+    expect(screen.getByText("Awaiting model output.")).toBeInTheDocument();
   });
 
-  test("handles event image load error", () => {
-    const report = {
-      headline: "Test Headline",
-    };
-    render(<ReportCard report={report} eventContext={mockEventContext} />);
-    const image = screen.getByAltText("Test Event");
-    fireEvent.error(image);
-    expect(image).toHaveStyle({ display: "none" });
-  });
-
-  test("does not render headline section when missing", () => {
+  test("does not render headline content when missing", () => {
     const report = {
       thesis: "Test thesis",
     };
@@ -144,10 +157,7 @@ describe("ReportCard Component", () => {
     };
     render(<ReportCard report={report} />);
     expect(screen.getByText("Test Headline")).toBeInTheDocument();
-    // Check for Thesis section heading (h4), not the word "Thesis" in "Report & Thesis" header
-    // The "Report & Thesis" header is in a p tag, so we check for h4 heading specifically
-    const thesisHeading = screen.queryByRole("heading", { name: "Thesis", level: 4 });
-    expect(thesisHeading).not.toBeInTheDocument();
+    expect(screen.queryByText("THESIS")).not.toBeInTheDocument();
   });
 
   test("does not render bull_case when empty array", () => {
@@ -156,7 +166,7 @@ describe("ReportCard Component", () => {
       bull_case: [],
     };
     render(<ReportCard report={report} />);
-    expect(screen.queryByText("Bull Case")).not.toBeInTheDocument();
+    expect(screen.queryByText("BULL CASE")).not.toBeInTheDocument();
   });
 
   test("does not render bear_case when empty array", () => {
@@ -165,7 +175,7 @@ describe("ReportCard Component", () => {
       bear_case: [],
     };
     render(<ReportCard report={report} />);
-    expect(screen.queryByText("Bear Case")).not.toBeInTheDocument();
+    expect(screen.queryByText("BEAR CASE")).not.toBeInTheDocument();
   });
 
   test("does not render key_risks when empty array", () => {
@@ -174,7 +184,7 @@ describe("ReportCard Component", () => {
       key_risks: [],
     };
     render(<ReportCard report={report} />);
-    expect(screen.queryByText("Key Risks")).not.toBeInTheDocument();
+    expect(screen.queryByText("KEY RISKS")).not.toBeInTheDocument();
   });
 
   test("does not render execution_notes when missing", () => {
@@ -182,7 +192,16 @@ describe("ReportCard Component", () => {
       headline: "Test Headline",
     };
     render(<ReportCard report={report} />);
-    expect(screen.queryByText("Execution Notes")).not.toBeInTheDocument();
+    expect(screen.queryByText("EXECUTION NOTES")).not.toBeInTheDocument();
+  });
+
+  test("does not render execution_notes when empty array", () => {
+    const report = {
+      headline: "Test Headline",
+      execution_notes: [],
+    };
+    render(<ReportCard report={report} />);
+    expect(screen.queryByText("EXECUTION NOTES")).not.toBeInTheDocument();
   });
 
   test("renders only bull_case when bear_case is missing", () => {
@@ -191,8 +210,8 @@ describe("ReportCard Component", () => {
       bull_case: ["Bull 1"],
     };
     render(<ReportCard report={report} />);
-    expect(screen.getByText("Bull Case")).toBeInTheDocument();
-    expect(screen.queryByText("Bear Case")).not.toBeInTheDocument();
+    expect(screen.getByText("BULL CASE")).toBeInTheDocument();
+    expect(screen.queryByText("BEAR CASE")).not.toBeInTheDocument();
   });
 
   test("renders only bear_case when bull_case is missing", () => {
@@ -201,8 +220,8 @@ describe("ReportCard Component", () => {
       bear_case: ["Bear 1"],
     };
     render(<ReportCard report={report} />);
-    expect(screen.getByText("Bear Case")).toBeInTheDocument();
-    expect(screen.queryByText("Bull Case")).not.toBeInTheDocument();
+    expect(screen.getByText("BEAR CASE")).toBeInTheDocument();
+    expect(screen.queryByText("BULL CASE")).not.toBeInTheDocument();
   });
 
   test("identifies structured report by headline", () => {
@@ -226,7 +245,7 @@ describe("ReportCard Component", () => {
       bull_case: ["Bull 1"],
     };
     render(<ReportCard report={report} />);
-    expect(screen.getByText("Bull Case")).toBeInTheDocument();
+    expect(screen.getByText("BULL CASE")).toBeInTheDocument();
   });
 
   test("handles null event context", () => {
@@ -260,12 +279,12 @@ describe("ReportCard Component", () => {
   test("renders multiple bear case points", () => {
     const report = {
       headline: "Test",
-      bear_case: ["Point 1", "Point 2", "Point 3"],
+      bear_case: ["BearPoint 1", "BearPoint 2", "BearPoint 3"],
     };
     render(<ReportCard report={report} />);
-    expect(screen.getByText("Point 1")).toBeInTheDocument();
-    expect(screen.getByText("Point 2")).toBeInTheDocument();
-    expect(screen.getByText("Point 3")).toBeInTheDocument();
+    expect(screen.getByText("BearPoint 1")).toBeInTheDocument();
+    expect(screen.getByText("BearPoint 2")).toBeInTheDocument();
+    expect(screen.getByText("BearPoint 3")).toBeInTheDocument();
   });
 
   test("renders multiple key risks", () => {
@@ -278,37 +297,11 @@ describe("ReportCard Component", () => {
     expect(screen.getByText("Risk 5")).toBeInTheDocument();
   });
 
-  test("handles report with only title (legacy field)", () => {
-    const report = {
-      title: "Legacy Title",
-      markdown: "Legacy content",
-    };
-    render(<ReportCard report={report} />);
-    expect(screen.getByText("Legacy content")).toBeInTheDocument();
-  });
-
-  test("handles empty string report", () => {
+  test("handles empty string report in fallback panel", () => {
     const report = "";
-    render(<ReportCard report={report} />);
-    // Empty string will match multiple elements, so we check that the component renders
-    expect(screen.getByText("Report & Thesis")).toBeInTheDocument();
-    // Check that the empty string is rendered in the content area
-    const contentDiv = screen.getByText("Report & Thesis").closest("section")?.querySelector(".whitespace-pre-wrap");
-    expect(contentDiv).toBeInTheDocument();
-  });
-
-  test("handles report with special characters in markdown", () => {
-    const report = {
-      markdown: "# Title\n\n*Bold* and _italic_ text\n\n- List item",
-    };
-    render(<ReportCard report={report} />);
-    expect(screen.getByText(/# Title/)).toBeInTheDocument();
-  });
-
-  test("handles report with newlines in string", () => {
-    const report = "Line 1\nLine 2\nLine 3";
-    render(<ReportCard report={report} />);
-    expect(screen.getByText(/Line 1/)).toBeInTheDocument();
+    const { container } = render(<ReportCard report={report} />);
+    // Component renders the fallback panel; intent: empty-string content path runs without throwing
+    expect(container.firstChild).toBeInTheDocument();
   });
 
   test("renders structured report sections in correct order", () => {
@@ -318,25 +311,24 @@ describe("ReportCard Component", () => {
       bull_case: ["TestBull"],
       bear_case: ["TestBear"],
       key_risks: ["TestRisk"],
-      execution_notes: "TestNotes",
+      execution_notes: ["TestNotes"],
     };
     const { container } = render(<ReportCard report={report} />);
     const textContent = container.textContent || "";
-    // Use unique text to avoid matching "Test" in "Report & Thesis"
     const headlineIndex = textContent.indexOf("TestHeadline");
     const thesisIndex = textContent.indexOf("TestThesis");
     const bullIndex = textContent.indexOf("TestBull");
     const bearIndex = textContent.indexOf("TestBear");
     const riskIndex = textContent.indexOf("TestRisk");
     const notesIndex = textContent.indexOf("TestNotes");
-    
+
     expect(headlineIndex).toBeGreaterThan(-1);
     expect(thesisIndex).toBeGreaterThan(-1);
     expect(bullIndex).toBeGreaterThan(-1);
     expect(bearIndex).toBeGreaterThan(-1);
     expect(riskIndex).toBeGreaterThan(-1);
     expect(notesIndex).toBeGreaterThan(-1);
-    
+
     expect(headlineIndex).toBeLessThan(thesisIndex);
     expect(thesisIndex).toBeLessThan(bullIndex);
     expect(bullIndex).toBeLessThan(bearIndex);
@@ -346,20 +338,10 @@ describe("ReportCard Component", () => {
 
   test("identifies structured report by execution_notes only", () => {
     const report = {
-      execution_notes: "Execution notes only",
+      execution_notes: ["Execution notes only"],
     };
     render(<ReportCard report={report} />);
     expect(screen.getByText("Execution notes only")).toBeInTheDocument();
-    expect(screen.getByText("Execution Notes")).toBeInTheDocument();
-  });
-
-  test("handles event image load error", () => {
-    const report = {
-      headline: "Test Headline",
-    };
-    render(<ReportCard report={report} eventContext={mockEventContext} />);
-    const image = screen.getByAltText("Test Event");
-    fireEvent.error(image);
-    expect(image).toHaveStyle({ display: "none" });
+    expect(screen.getByText("EXECUTION NOTES")).toBeInTheDocument();
   });
 });

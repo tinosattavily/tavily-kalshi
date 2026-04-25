@@ -294,7 +294,7 @@ function MainPanelSection({
     <>
       {signalReady ? <SignalCard signal={results.signal!} /> : <SignalSkeleton />}
       {reportReady ? (
-        <ReportCard report={results.report!} eventContext={results.event_context} />
+        <ReportCard report={results.report!} eventContext={results.event_context} signal={results.signal ?? null} />
       ) : (
         <ReportSkeleton />
       )}
