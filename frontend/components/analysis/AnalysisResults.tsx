@@ -3,7 +3,9 @@
 import React, { useCallback } from "react";
 import MarketPicker from "./MarketPicker";
 import { MarketCard } from "./MarketCard";
-import { NewsCard } from "./NewsCard";
+import MainPanel from "./MainPanel";
+import NewsTab from "./NewsTab";
+import SummaryTab from "./SummaryTab";
 import SignalCard from "./SignalCard";
 import ReportCard from "./ReportCard";
 import { MarketSnapshotSkeleton } from "../skeletons/MarketSnapshotSkeleton";
@@ -136,18 +138,12 @@ export function AnalysisResultsView({
         mapMarketOptions={mapMarketOptions}
       />
 
-      {/* News Card */}
-      <NewsCardSection
+      {/* Tabbed main panel: News / Summary / Thesis */}
+      <MainPanelSection
         results={results}
         runStatus={runStatus}
         mapNewsArticles={mapNewsArticles}
       />
-
-      {/* Signal Card */}
-      <SignalCardSection results={results} runStatus={runStatus} />
-
-      {/* Report Card */}
-      <ReportCardSection results={results} runStatus={runStatus} />
     </div>
   );
 }
@@ -234,7 +230,7 @@ function MarketCardSection({
   return null;
 }
 
-interface NewsCardSectionProps {
+interface MainPanelSectionProps {
   results: AnalysisResultsType;
   runStatus: RunStatus | null;
   mapNewsArticles: (newsContext?: NewsContext) => Array<{
@@ -247,75 +243,70 @@ interface NewsCardSectionProps {
   }>;
 }
 
-function NewsCardSection({ results, runStatus, mapNewsArticles }: NewsCardSectionProps): React.JSX.Element | null {
-  if (runStatus?.news === "done" && results.news_context) {
-    const hasContent =
-      (results.news_context.articles && Array.isArray(results.news_context.articles) && results.news_context.articles.length > 0) ||
-      (results.news_context.summary && results.news_context.summary.trim().length > 0) ||
-      (results.news_context.combined_summary && results.news_context.combined_summary.trim().length > 0);
+function MainPanelSection({
+  results,
+  runStatus,
+  mapNewsArticles,
+}: MainPanelSectionProps): React.JSX.Element | null {
+  const newsReady = runStatus?.news === "done" && Boolean(results.news_context);
+  const signalReady =
+    runStatus?.signal === "done" &&
+    Boolean(results.signal) &&
+    Object.keys(results.signal ?? {}).length > 0;
+  const reportReady = runStatus?.report === "done" && Boolean(results.report);
 
-    if (hasContent) {
-      return (
-        <div className="mb-6">
-          <NewsCard
-            heading="Market News & Analysis"
-            highlights={mapNewsArticles(results.news_context)}
-            isLoading={false}
-            newsSummary={results.news_context.summary}
-            combinedSummary={results.news_context.combined_summary}
-            onItemClick={(item) => {
-              if (item.url) {
-                window.open(item.url, "_blank", "noopener,noreferrer");
-              }
-            }}
-          />
-        </div>
-      );
-    }
-    return null;
-  }
-
-  if (runStatus?.news === "pending" || runStatus?.news === undefined) {
+  // While early phases are still pending, show stacked skeletons (preserves prior behavior).
+  if (!newsReady && !signalReady && !reportReady) {
     return (
-      <div className="mb-6">
-        <NewsSkeleton />
+      <div>
+        <div className="mb-6">
+          <NewsSkeleton />
+        </div>
+        <SignalSkeleton />
+        <ReportSkeleton />
       </div>
     );
   }
 
-  return null;
-}
+  const articles = newsReady ? mapNewsArticles(results.news_context) : [];
 
-interface SignalCardSectionProps {
-  results: AnalysisResultsType;
-  runStatus: RunStatus | null;
-}
+  const newsTab = (
+    <NewsTab
+      highlights={articles}
+      isLoading={!newsReady}
+      onItemClick={(item) => {
+        if (item.url) {
+          window.open(item.url, "_blank", "noopener,noreferrer");
+        }
+      }}
+    />
+  );
 
-function SignalCardSection({ results, runStatus }: SignalCardSectionProps): React.JSX.Element | null {
-  if (runStatus?.signal === "done" && results.signal && Object.keys(results.signal).length > 0) {
-    return <SignalCard signal={results.signal} />;
-  }
+  const summaryTab = (
+    <SummaryTab
+      highlights={articles}
+      newsSummary={results.news_context?.summary}
+      combinedSummary={results.news_context?.combined_summary}
+    />
+  );
 
-  if (runStatus?.signal === "pending" || runStatus?.signal === undefined) {
-    return <SignalSkeleton />;
-  }
+  const thesisTab = (
+    <>
+      {signalReady ? <SignalCard signal={results.signal!} /> : <SignalSkeleton />}
+      {reportReady ? (
+        <ReportCard report={results.report!} eventContext={results.event_context} />
+      ) : (
+        <ReportSkeleton />
+      )}
+    </>
+  );
 
-  return null;
-}
-
-interface ReportCardSectionProps {
-  results: AnalysisResultsType;
-  runStatus: RunStatus | null;
-}
-
-function ReportCardSection({ results, runStatus }: ReportCardSectionProps): React.JSX.Element | null {
-  if (runStatus?.report === "done" && results.report) {
-    return <ReportCard report={results.report} eventContext={results.event_context} />;
-  }
-
-  if (runStatus?.report === "pending" || runStatus?.report === undefined) {
-    return <ReportSkeleton />;
-  }
-
-  return null;
+  return (
+    <MainPanel
+      newsCount={articles.length}
+      newsTab={newsTab}
+      summaryTab={summaryTab}
+      thesisTab={thesisTab}
+    />
+  );
 }

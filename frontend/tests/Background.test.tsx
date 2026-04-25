@@ -246,12 +246,20 @@ describe("Dashboard Component", () => {
       });
 
     renderDashboard();
-    
+
     const input = screen.getByPlaceholderText(/kalshi/i);
     await user.type(input, "https://kalshi.com/markets/test");
-    
+
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
+
+    // MainPanel defaults to the Thesis tab; switch to News to surface the article.
+    const newsTabButton = await screen.findByRole(
+      "button",
+      { name: /^news/i },
+      { timeout: 3000 },
+    );
+    await user.click(newsTabButton);
 
     await waitFor(() => {
       expect(screen.getByText(/test article/i)).toBeInTheDocument();
@@ -1058,11 +1066,19 @@ describe("Dashboard Component", () => {
       });
 
     renderDashboard();
-    
+
     const input = screen.getByPlaceholderText(/kalshi/i);
     await user.type(input, "https://kalshi.com/markets/test");
     const submitButton = screen.getByRole("button", { name: /analyze|submit/i });
     await user.click(submitButton);
+
+    // MainPanel defaults to the Thesis tab; switch to News to surface the article.
+    const newsTabButton = await screen.findByRole(
+      "button",
+      { name: /^news/i },
+      { timeout: 3000 },
+    );
+    await user.click(newsTabButton);
 
     await waitFor(() => {
       expect(screen.getByText(/news article/i)).toBeInTheDocument();
