@@ -199,6 +199,7 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
             config={configuration}
             onChange={setConfiguration}
             isSubmitting={isSubmitting}
+            onSubmit={handleSubmit}
           />
         </>
       }

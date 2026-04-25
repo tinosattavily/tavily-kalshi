@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+import { Zap } from "lucide-react";
 
 export interface AnalysisConfiguration {
   useTavilyPromptAgent: boolean;
@@ -15,6 +16,7 @@ interface ConfigPanelContentProps {
   config: AnalysisConfiguration;
   onChange: (config: AnalysisConfiguration) => void;
   isSubmitting?: boolean;
+  onSubmit?: () => void;
 }
 
 interface NeuromorphicToggleProps {
@@ -26,39 +28,99 @@ interface NeuromorphicToggleProps {
 
 function NeuromorphicToggle({ id, checked, onChange, disabled = false }: NeuromorphicToggleProps) {
   return (
-    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-      <input
-        type="checkbox"
-        id={id}
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-        className="sr-only peer"
-      />
-      {/* Toggle track */}
-      <div
-        className="relative overflow-hidden"
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      className="relative rounded-full p-0.5 cursor-pointer transition-colors disabled:opacity-50"
+      style={{
+        width: 40,
+        height: 22,
+        background: checked ? "var(--accent)" : "var(--neu-track)",
+        boxShadow: checked
+          ? "inset 0 1px 2px var(--accent-shadow)"
+          : "var(--neu-inset)",
+      }}
+    >
+      <span
+        className="block rounded-full"
         style={{
-          width: "40px",
-          height: "20px",
-          borderRadius: "10px",
-          boxShadow: "-4px -2px 4px 0px #ffffff, 4px 2px 6px 0px #d1d9e6, 2px 2px 2px 0px #d1d9e6 inset, -2px -2px 2px 0px #ffffff inset",
+          width: 18,
+          height: 18,
+          background: "var(--neu-thumb)",
+          boxShadow: "var(--neu-raised)",
+          transform: `translateX(${checked ? 18 : 0}px)`,
+          transition: "transform .2s",
         }}
-      >
-        {/* Sliding indicator */}
-        <div
-          className="h-full"
-          style={{
-            width: "200%",
-            background: checked ? "#86efac" : "#ecf0f3",
-            borderRadius: "10px",
-            transform: checked ? "translate3d(25%, 0, 0)" : "translate3d(-75%, 0, 0)",
-            transition: "transform 0.4s cubic-bezier(0.85, 0.05, 0.18, 1.35), background 0.4s ease",
-            boxShadow: "-4px -2px 4px 0px #ffffff, 4px 2px 6px 0px #d1d9e6",
-          }}
-        />
+      />
+    </button>
+  );
+}
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="font-mono uppercase font-semibold text-ink-mute"
+      style={{ padding: "12px 4px 8px", fontSize: 9, letterSpacing: 1.4 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SegChip({
+  options,
+  value,
+  onSelect,
+}: {
+  options: string[];
+  value: string;
+  onSelect: (v: string) => void;
+}) {
+  return (
+    <div className="inline-flex gap-0.5 p-0.5 rounded bg-neu-track shadow-neu-inset border border-ring">
+      {options.map((o) => {
+        const on = o === value;
+        return (
+          <button
+            key={o}
+            type="button"
+            onClick={() => onSelect(o)}
+            className={
+              "font-mono text-[10px] px-2 py-0.5 rounded " +
+              (on
+                ? "bg-glass-strong shadow-neu-raised text-ink"
+                : "text-ink-mute hover:text-ink-soft")
+            }
+          >
+            {o}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ConfigRow({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 px-1 py-2 min-h-9">
+      <div className="flex-1 min-w-0">
+        <div className="text-[12px] text-ink font-medium">{label}</div>
+        {hint && <div className="text-[10.5px] text-ink-mute mt-0.5">{hint}</div>}
       </div>
-    </label>
+      {children}
+    </div>
   );
 }
 
@@ -66,6 +128,7 @@ export default function ConfigPanelContent({
   config,
   onChange,
   isSubmitting = false,
+  onSubmit,
 }: ConfigPanelContentProps): React.JSX.Element {
   const updateConfig = <K extends keyof AnalysisConfiguration>(
     key: K,
@@ -74,179 +137,147 @@ export default function ConfigPanelContent({
     onChange({ ...config, [key]: value });
   };
 
+  // Decorative seg-chips not yet wired to AnalysisConfiguration; keep as local UI state.
+  const [timeWindow, setTimeWindow] = useState<string>("7d");
+  const [bias, setBias] = useState<string>("calib");
+
   return (
-    <div className="h-full flex flex-col bg-white/60 backdrop-blur-sm border-r border-b border-neutral-300">
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* Agent Toggles Section */}
-        <section>
-          <h3 className="text-sm font-semibold text-neutral-700 mb-3">Agent Settings</h3>
-          <div className="space-y-3">
-            {/* Tavily Prompt Agent Toggle */}
-            <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-200 min-w-0 overflow-hidden gap-3">
-              <div className="flex-1 min-w-0">
-                <label
-                  htmlFor="tavily-prompt-toggle"
-                  className="text-sm font-medium text-[#394a56] cursor-pointer block break-words"
-                >
-                  Use Tavily Prompt Agent
-                </label>
-                <p className="text-xs text-neutral-500 mt-1 break-words overflow-hidden">
-                  Generate optimized queries with AI. Disable to use fallback queries.
-                </p>
-              </div>
-              <NeuromorphicToggle
-                id="tavily-prompt-toggle"
-                checked={config.useTavilyPromptAgent}
-                onChange={(checked) => updateConfig("useTavilyPromptAgent", checked)}
-                disabled={isSubmitting}
-              />
-            </div>
+    <div className="flex flex-col h-full overflow-auto px-3 pb-2">
+      {/* AGENTS */}
+      <SectionHeader>Agents</SectionHeader>
+      <ConfigRow
+        label="Tavily prompt agent"
+        hint="Generate optimized queries with AI."
+      >
+        <NeuromorphicToggle
+          id="tavily-prompt-toggle"
+          checked={config.useTavilyPromptAgent}
+          onChange={(checked) => updateConfig("useTavilyPromptAgent", checked)}
+          disabled={isSubmitting}
+        />
+      </ConfigRow>
+      <ConfigRow
+        label="News summarizer"
+        hint="AI-powered article summaries."
+      >
+        <NeuromorphicToggle
+          id="news-summary-toggle"
+          checked={config.useNewsSummaryAgent}
+          onChange={(checked) => updateConfig("useNewsSummaryAgent", checked)}
+          disabled={isSubmitting}
+        />
+      </ConfigRow>
+      <ConfigRow
+        label="Sentiment analysis"
+        hint="Bullish / bearish / neutral classification."
+      >
+        <NeuromorphicToggle
+          id="sentiment-toggle"
+          checked={config.enableSentimentAnalysis}
+          onChange={(checked) => updateConfig("enableSentimentAnalysis", checked)}
+          disabled={isSubmitting}
+        />
+      </ConfigRow>
 
-            {/* News Summary Agent Toggle */}
-            <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-200 min-w-0 overflow-hidden gap-3">
-              <div className="flex-1 min-w-0">
-                <label
-                  htmlFor="news-summary-toggle"
-                  className="text-sm font-medium text-[#394a56] cursor-pointer block break-words"
-                >
-                  Use News Summary Agent
-                </label>
-                <p className="text-xs text-neutral-500 mt-1 break-words overflow-hidden">
-                  Generate AI-powered summaries. Disable to use fallback summaries.
-                </p>
-              </div>
-              <NeuromorphicToggle
-                id="news-summary-toggle"
-                checked={config.useNewsSummaryAgent}
-                onChange={(checked) => updateConfig("useNewsSummaryAgent", checked)}
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* Sentiment Analysis Toggle */}
-            <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg border border-neutral-200 min-w-0 overflow-hidden gap-3">
-              <div className="flex-1 min-w-0">
-                <label
-                  htmlFor="sentiment-toggle"
-                  className="text-sm font-medium text-[#394a56] cursor-pointer block break-words"
-                >
-                  Enable Sentiment Analysis
-                </label>
-                <p className="text-xs text-neutral-500 mt-1 break-words overflow-hidden">
-                  Analyze article sentiment (bullish/bearish/neutral).
-                </p>
-              </div>
-              <NeuromorphicToggle
-                id="sentiment-toggle"
-                checked={config.enableSentimentAnalysis}
-                onChange={(checked) => updateConfig("enableSentimentAnalysis", checked)}
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* Article Limits Section */}
-        <section>
-          <h3 className="text-sm font-semibold text-neutral-700 mb-3">Article Limits</h3>
-          <div className="space-y-4">
-            {/* Max Articles */}
-            <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-200 overflow-hidden min-w-0">
-              <label
-                htmlFor="max-articles"
-                className="block text-sm font-medium text-[#394a56] mb-2 break-words"
-              >
-                Max Articles: {config.maxArticles}
-              </label>
-              <input
-                type="range"
-                id="max-articles"
-                min="5"
-                max="30"
-                step="1"
-                value={config.maxArticles}
-                onChange={(e) => updateConfig("maxArticles", parseInt(e.target.value, 10))}
-                disabled={isSubmitting}
-                className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-blue-600 min-w-0"
-              />
-              <div className="flex justify-between text-xs text-neutral-500 mt-1">
-                <span>5</span>
-                <span>30</span>
-              </div>
-              <p className="text-xs text-neutral-500 mt-2 break-words overflow-hidden">
-                Maximum number of articles to include in analysis.
-              </p>
-            </div>
-
-            {/* Max Articles Per Query */}
-            <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-200 overflow-hidden min-w-0">
-              <label
-                htmlFor="max-articles-per-query"
-                className="block text-sm font-medium text-[#394a56] mb-2 break-words"
-              >
-                Max Per Query: {config.maxArticlesPerQuery}
-              </label>
-              <input
-                type="range"
-                id="max-articles-per-query"
-                min="5"
-                max="12"
-                step="1"
-                value={config.maxArticlesPerQuery}
-                onChange={(e) => updateConfig("maxArticlesPerQuery", parseInt(e.target.value, 10))}
-                disabled={isSubmitting}
-                className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-blue-600 min-w-0"
-              />
-              <div className="flex justify-between text-xs text-neutral-500 mt-1">
-                <span>5</span>
-                <span>12</span>
-              </div>
-              <p className="text-xs text-neutral-500 mt-2 break-words overflow-hidden">
-                Maximum results per Tavily search query.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Analysis Settings Section */}
-        <section>
-          <h3 className="text-sm font-semibold text-neutral-700 mb-3">Analysis Settings</h3>
-          <div className="space-y-3">
-            {/* Min Confidence */}
-            <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-200 overflow-hidden min-w-0">
-              <label
-                htmlFor="min-confidence"
-                className="block text-sm font-medium text-[#394a56] mb-2 break-words"
-              >
-                Minimum Confidence
-              </label>
-              <select
-                id="min-confidence"
-                value={config.minConfidence}
-                onChange={(e) =>
-                  updateConfig("minConfidence", e.target.value as "low" | "medium" | "high")
-                }
-                disabled={isSubmitting}
-                className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-0"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-              <p className="text-xs text-neutral-500 mt-2 break-words overflow-hidden">
-                Minimum confidence level for trading signals.
-              </p>
-            </div>
-          </div>
-        </section>
+      {/* RETRIEVAL */}
+      <SectionHeader>Retrieval</SectionHeader>
+      <div className="rounded p-3 bg-glass-strong border border-ring shadow-neu-inset mb-2">
+        <div className="flex items-baseline mb-2">
+          <span className="text-[12px] text-ink-soft">Max articles</span>
+          <span className="flex-1" />
+          <span className="font-mono text-[14px] font-semibold text-ink">
+            {config.maxArticles}
+          </span>
+        </div>
+        <input
+          type="range"
+          id="max-articles"
+          min="5"
+          max="30"
+          step="1"
+          value={config.maxArticles}
+          onChange={(e) => updateConfig("maxArticles", parseInt(e.target.value, 10))}
+          disabled={isSubmitting}
+          className="w-full h-2 bg-neu-track rounded-lg appearance-none cursor-pointer accent-accent min-w-0"
+        />
+        <div className="flex justify-between mt-1.5 font-mono text-[9px] text-ink-mute">
+          <span>5</span>
+          <span>30</span>
+        </div>
       </div>
-
-      {/* Footer */}
-      <div className="border-t border-neutral-300 bg-white/60 backdrop-blur-sm p-3">
-        <p className="text-xs text-neutral-500 text-center">
-          Settings apply to the next analysis run
-        </p>
+      <div className="rounded p-3 bg-glass-strong border border-ring shadow-neu-inset mb-2">
+        <div className="flex items-baseline mb-2">
+          <span className="text-[12px] text-ink-soft">Max per query</span>
+          <span className="flex-1" />
+          <span className="font-mono text-[14px] font-semibold text-ink">
+            {config.maxArticlesPerQuery}
+          </span>
+        </div>
+        <input
+          type="range"
+          id="max-articles-per-query"
+          min="5"
+          max="12"
+          step="1"
+          value={config.maxArticlesPerQuery}
+          onChange={(e) =>
+            updateConfig("maxArticlesPerQuery", parseInt(e.target.value, 10))
+          }
+          disabled={isSubmitting}
+          className="w-full h-2 bg-neu-track rounded-lg appearance-none cursor-pointer accent-accent min-w-0"
+        />
+        <div className="flex justify-between mt-1.5 font-mono text-[9px] text-ink-mute">
+          <span>5</span>
+          <span>12</span>
+        </div>
       </div>
+      <ConfigRow label="Time window" hint="Recency filter for retrieval.">
+        <SegChip
+          options={["24h", "7d", "30d"]}
+          value={timeWindow}
+          onSelect={setTimeWindow}
+        />
+      </ConfigRow>
+
+      {/* MODEL */}
+      <SectionHeader>Model</SectionHeader>
+      <ConfigRow label="Bias" hint="Calibrated or contrarian stance.">
+        <SegChip
+          options={["calib", "contrarian"]}
+          value={bias}
+          onSelect={setBias}
+        />
+      </ConfigRow>
+      <ConfigRow label="Confidence floor" hint="Minimum confidence for signals.">
+        <SegChip
+          options={["low", "medium", "high"]}
+          value={config.minConfidence}
+          onSelect={(v) =>
+            updateConfig("minConfidence", v as "low" | "medium" | "high")
+          }
+        />
+      </ConfigRow>
+
+      {/* Re-run CTA */}
+      {onSubmit && (
+        <div className="px-0 pt-3 pb-3 border-t border-line mt-3">
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={isSubmitting}
+            className="w-full h-10 rounded inline-flex items-center justify-center gap-2 font-sans text-[13px] font-semibold disabled:opacity-50"
+            style={{
+              background: "var(--accent)",
+              color: "var(--accent-on)",
+              letterSpacing: "-0.01em",
+              boxShadow: "var(--neu-raised)",
+            }}
+          >
+            <Zap size={13} strokeWidth={2.5} />
+            Re-run analysis
+          </button>
+        </div>
+      )}
     </div>
   );
 }
