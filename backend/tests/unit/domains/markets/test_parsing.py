@@ -25,6 +25,7 @@ class TestIsKalshiUrl:
 
         assert is_kalshi_url("https://polymarket.com/event/test") is False
         assert is_kalshi_url("https://google.com") is False
+        assert is_kalshi_url("https://kalshi.com.evil.test/markets/AAA-25JAN-B1") is False
 
 
 class TestExtractKalshiTicker:
@@ -43,6 +44,22 @@ class TestExtractKalshiTicker:
 
         assert extract_kalshi_ticker_from_url("https://kalshi.com/events/TEST") is None
 
+    def test_extracts_ticker_from_pretty_url_last_segment(self):
+        """Should extract the final ticker segment from pretty market URLs."""
+        from app.domains.markets.parsing import extract_kalshi_ticker_from_url
+
+        url = "https://kalshi.com/markets/will-sp-close-higher/KXINXD/INXD-25JAN17-B24999"
+        assert extract_kalshi_ticker_from_url(url) == "INXD-25JAN17-B24999"
+
+    def test_pretty_url_without_ticker_segment_returns_none(self):
+        """Should ignore descriptive slugs that are not Kalshi ticker-shaped."""
+        from app.domains.markets.parsing import extract_kalshi_ticker_from_url
+
+        assert (
+            extract_kalshi_ticker_from_url("https://kalshi.com/markets/will-sp-close-higher")
+            is None
+        )
+
 
 class TestExtractKalshiEventTicker:
     """Tests for extract_kalshi_event_ticker_from_url function."""
@@ -52,6 +69,13 @@ class TestExtractKalshiEventTicker:
         from app.domains.markets.parsing import extract_kalshi_event_ticker_from_url
 
         url = "https://kalshi.com/events/INXD-25JAN17"
+        assert extract_kalshi_event_ticker_from_url(url) == "INXD-25JAN17"
+
+    def test_extracts_event_ticker_from_pretty_url_last_segment(self):
+        """Should extract the final ticker segment from pretty event URLs."""
+        from app.domains.markets.parsing import extract_kalshi_event_ticker_from_url
+
+        url = "https://kalshi.com/events/sp-500-january/INXD-25JAN17"
         assert extract_kalshi_event_ticker_from_url(url) == "INXD-25JAN17"
 
 

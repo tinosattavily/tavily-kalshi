@@ -106,6 +106,8 @@ async def generate_signal(
             news_summary=news_summary,
             top_headlines=top_headlines,
             tag_label=tag_label,
+            venue=market_snapshot.get("venue", "polymarket"),
+            market_id=market_snapshot.get("market_id") or market_snapshot.get("slug") or "unknown",
         )
     except RuntimeError:
         logger.warning("OpenAI not available, using fallback signal")

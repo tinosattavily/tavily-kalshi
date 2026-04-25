@@ -41,9 +41,9 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
   const [runStatus, setRunStatus] = useState<RunStatus | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [selectedMarketSlug, setSelectedMarketSlug] = useState<string | null>(null);
+  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [lastSortedMarketOptions, setLastSortedMarketOptions] = useState<
-    { slug: string; question: string }[]
+    { market_id: string; question: string; slug?: string }[]
   >([]);
   const [recentSessionsRefreshTrigger, setRecentSessionsRefreshTrigger] = useState(0);
 
@@ -68,10 +68,10 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
       });
       setIsSubmitting(false);
     }, []),
-    onComplete: useCallback((marketSlug?: string) => {
+    onComplete: useCallback((marketId?: string) => {
       setIsSubmitting(false);
-      if (marketSlug) {
-        setSelectedMarketSlug(marketSlug);
+      if (marketId) {
+        setSelectedMarketId(marketId);
       }
     }, []),
     onRefreshTrigger: useCallback(() => {
@@ -103,7 +103,7 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
     setResults,
     setRunStatus,
     setUrl,
-    setSelectedMarketSlug,
+    setSelectedMarketId,
     stopPolling,
     runIdRef,
     showToast,
@@ -111,18 +111,21 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
 
   // Callbacks
   const handleSortedOptionsChange = useCallback(
-    (options: Array<{ slug?: string; question?: string; id?: string; title?: string }>) => {
+    (options: Array<{ market_id?: string; slug?: string; question?: string; id?: string; title?: string; label?: string }>) => {
       const mapped = options
-        .map((option) => {
-          const slug = option?.slug ?? option?.id;
-          if (!slug) return null;
-          return { slug: String(slug), question: option?.question || option?.title || String(slug) };
-        })
-        .filter((option): option is { slug: string; question: string } => Boolean(option));
+        .flatMap((option) => {
+          const marketId = option?.market_id ?? option?.slug ?? option?.id;
+          if (!marketId) return [];
+          return {
+            market_id: String(marketId),
+            slug: option?.slug,
+            question: option?.label || option?.question || option?.title || String(marketId),
+          };
+        });
 
       setLastSortedMarketOptions((prev) => {
         if (prev.length === mapped.length &&
-            prev.every((p, i) => p.slug === mapped[i]?.slug && p.question === mapped[i]?.question)) {
+            prev.every((p, i) => p.market_id === mapped[i]?.market_id && p.question === mapped[i]?.question)) {
           return prev;
         }
         return mapped;
@@ -192,7 +195,7 @@ export default function Dashboard(_props: PropsWithChildren): React.JSX.Element 
           runStatus={runStatus}
           url={url}
           isSubmitting={isSubmitting}
-          selectedMarketSlug={selectedMarketSlug}
+          selectedMarketId={selectedMarketId}
           lastSortedMarketOptions={lastSortedMarketOptions}
           onSelectMarket={handleSelectMarket}
           onSortedOptionsChange={handleSortedOptionsChange}

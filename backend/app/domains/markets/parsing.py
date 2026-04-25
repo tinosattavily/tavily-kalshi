@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
+from app.domains.markets.canonicalization import _host_matches
+
 
 def extract_slug_from_url(url: str | None) -> Optional[str]:
     """Extract market/event slug from Polymarket URL."""
@@ -84,17 +86,20 @@ def parse_end_date(value: Optional[str]) -> Optional[datetime]:
         return None
 
 
-# Kalshi URL patterns
+# Kalshi URL patterns. Pretty URLs are lowercased, but the API requires uppercase tickers,
+# so we match case-insensitively and uppercase the result.
 KALSHI_DOMAINS = ["kalshi.com", "kalshi.co"]
-KALSHI_MARKET_PATTERN = re.compile(r"/markets/([A-Z0-9\-]+)", re.IGNORECASE)
-KALSHI_EVENT_PATTERN = re.compile(r"/events/([A-Z0-9\-]+)", re.IGNORECASE)
+KALSHI_TICKER_SEGMENT_PATTERN = re.compile(
+    r"^(?=.*\d)[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$",
+    re.IGNORECASE,
+)
 
 
 def is_kalshi_url(url: str) -> bool:
     """Check if URL is a Kalshi market or event URL."""
     try:
         parsed = urlparse(url)
-        return any(domain in parsed.netloc for domain in KALSHI_DOMAINS)
+        return _host_matches(parsed.netloc.lower(), tuple(KALSHI_DOMAINS))
     except Exception:
         return False
 
@@ -104,9 +109,17 @@ def extract_kalshi_ticker_from_url(url: str) -> Optional[str]:
 
     Examples:
         https://kalshi.com/markets/INXD-25JAN17-B24999 -> INXD-25JAN17-B24999
+        https://kalshi.com/markets/kxmlbmention/mlb-announcers/kxmlbmention-26apr24chclad
+            -> KXMLBMENTION-26APR24CHCLAD
     """
-    match = KALSHI_MARKET_PATTERN.search(url)
-    return match.group(1) if match else None
+    parsed = urlparse(url)
+    parts = [part for part in parsed.path.split("/") if part]
+    if "markets" not in parts:
+        return None
+    for part in reversed(parts):
+        if KALSHI_TICKER_SEGMENT_PATTERN.match(part):
+            return part.upper()
+    return None
 
 
 def extract_kalshi_event_ticker_from_url(url: str) -> Optional[str]:
@@ -115,8 +128,14 @@ def extract_kalshi_event_ticker_from_url(url: str) -> Optional[str]:
     Examples:
         https://kalshi.com/events/INXD-25JAN17 -> INXD-25JAN17
     """
-    match = KALSHI_EVENT_PATTERN.search(url)
-    return match.group(1) if match else None
+    parsed = urlparse(url)
+    parts = [part for part in parsed.path.split("/") if part]
+    if "events" not in parts:
+        return None
+    for part in reversed(parts):
+        if KALSHI_TICKER_SEGMENT_PATTERN.match(part):
+            return part.upper()
+    return None
 
 
 def parse_kalshi_url(url: str) -> Tuple[Optional[str], Optional[str], str]:
@@ -128,18 +147,8 @@ def parse_kalshi_url(url: str) -> Tuple[Optional[str], Optional[str], str]:
     """
     ticker = extract_kalshi_ticker_from_url(url)
     if ticker:
-        # Market URLs have event ticker embedded: INXD-25JAN17-B24999 -> INXD-25JAN17
-        # Split from the right, taking all but the last segment
-        parts = ticker.rsplit("-", 1)
-        if len(parts) == 2 and parts[1].startswith("B"):
-            # This is a bracket market, event ticker is everything before last dash
-            event_ticker = parts[0]
-        else:
-            # Try to extract event ticker from URL path
-            event_ticker = extract_kalshi_event_ticker_from_url(url)
-            if not event_ticker:
-                # Fallback: assume first parts are event ticker
-                event_ticker = "-".join(ticker.split("-")[:-1]) if "-" in ticker else None
+        explicit_event_ticker = extract_kalshi_event_ticker_from_url(url)
+        event_ticker = explicit_event_ticker or ticker.rsplit("-", 1)[0]
         return ticker, event_ticker, "market"
 
     event_ticker = extract_kalshi_event_ticker_from_url(url)

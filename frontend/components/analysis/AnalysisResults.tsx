@@ -19,10 +19,10 @@ interface AnalysisResultsProps {
   runStatus: RunStatus | null;
   url: string;
   isSubmitting: boolean;
-  selectedMarketSlug: string | null;
-  lastSortedMarketOptions: { slug: string; question: string }[];
-  onSelectMarket: (marketSlug: string) => void;
-  onSortedOptionsChange: (options: Array<{ slug?: string; question?: string; id?: string; title?: string }>) => void;
+  selectedMarketId: string | null;
+  lastSortedMarketOptions: { market_id: string; question: string; slug?: string }[];
+  onSelectMarket: (marketId: string) => void;
+  onSortedOptionsChange: (options: Array<{ market_id?: string; slug?: string; question?: string; id?: string; title?: string; label?: string }>) => void;
 }
 
 /**
@@ -33,7 +33,7 @@ export function AnalysisResultsView({
   runStatus,
   url,
   isSubmitting,
-  selectedMarketSlug,
+  selectedMarketId,
   lastSortedMarketOptions,
   onSelectMarket,
   onSortedOptionsChange,
@@ -56,18 +56,18 @@ export function AnalysisResultsView({
 
   // Utility: map market options
   const mapMarketOptions = useCallback(
-    (options: Array<{ slug?: string; question?: string; id?: string; title?: string }> | undefined | null) => {
+    (options: Array<{ market_id?: string; slug?: string; question?: string; id?: string; title?: string; label?: string }> | undefined | null) => {
       if (!Array.isArray(options)) return [];
       return options
-        .map((option) => {
-          const slug = option?.slug ?? option?.id;
-          if (!slug) return null;
+        .flatMap((option) => {
+          const marketId = option?.market_id ?? option?.slug ?? option?.id;
+          if (!marketId) return [];
           return {
-            slug: String(slug),
-            question: option?.question || option?.title || String(slug),
+            market_id: String(marketId),
+            slug: option?.slug,
+            question: option?.label || option?.question || option?.title || String(marketId),
           };
-        })
-        .filter((option): option is { slug: string; question: string } => Boolean(option));
+        });
     },
     []
   );
@@ -112,7 +112,7 @@ export function AnalysisResultsView({
   if (requiresMarketSelection) {
     return (
       <MarketPicker
-        options={results.market_options!.filter((opt): opt is { slug: string; question?: string; id?: string } => !!opt.slug)}
+        options={results.market_options!.filter((opt) => Boolean(opt.market_id || opt.slug || opt.id))}
         eventContext={results.event_context}
         isSubmitting={isSubmitting}
         onSelect={onSelectMarket}
@@ -129,7 +129,7 @@ export function AnalysisResultsView({
         results={results}
         runStatus={runStatus}
         url={url}
-        selectedMarketSlug={selectedMarketSlug}
+        selectedMarketId={selectedMarketId}
         lastSortedMarketOptions={lastSortedMarketOptions}
         onSelectMarket={onSelectMarket}
         humanizeClosesIn={humanizeClosesIn}
@@ -158,18 +158,18 @@ interface MarketCardSectionProps {
   results: AnalysisResultsType;
   runStatus: RunStatus | null;
   url: string;
-  selectedMarketSlug: string | null;
-  lastSortedMarketOptions: { slug: string; question: string }[];
-  onSelectMarket: (marketSlug: string) => void;
+  selectedMarketId: string | null;
+  lastSortedMarketOptions: { market_id: string; question: string; slug?: string }[];
+  onSelectMarket: (marketId: string) => void;
   humanizeClosesIn: (isoDate?: string) => string;
-  mapMarketOptions: (options: Array<{ slug?: string; question?: string; id?: string; title?: string }> | undefined | null) => { slug: string; question: string }[];
+  mapMarketOptions: (options: Array<{ market_id?: string; slug?: string; question?: string; id?: string; title?: string; label?: string }> | undefined | null) => { market_id: string; question: string; slug?: string }[];
 }
 
 function MarketCardSection({
   results,
   runStatus,
   url,
-  selectedMarketSlug,
+  selectedMarketId,
   lastSortedMarketOptions,
   onSelectMarket,
   humanizeClosesIn,
@@ -188,6 +188,7 @@ function MarketCardSection({
         <MarketCard
           eventTitle={results.event_context?.title || results.market_snapshot.question || "Event"}
           groupItemTitle={results.market_snapshot.group_item_title || results.market_snapshot.groupItemTitle}
+          venue={results.market_snapshot.venue}
           marketUrl={results.market_snapshot.url || results.event_context?.url || url || "#"}
           closesIn={humanizeClosesIn(results.market_snapshot.endDate || results.market_snapshot.end_date)}
           endDate={results.market_snapshot.endDate || results.market_snapshot.end_date}
@@ -197,7 +198,7 @@ function MarketCardSection({
               ? lastSortedMarketOptions
               : mapMarketOptions(results.market_options)
           }
-          activeMarketSlug={selectedMarketSlug ?? undefined}
+          activeMarketId={selectedMarketId ?? undefined}
           onMarketSelect={onSelectMarket}
           yesPrice={results.market_snapshot.yes_price ?? 0}
           noPrice={results.market_snapshot.no_price ?? 0}

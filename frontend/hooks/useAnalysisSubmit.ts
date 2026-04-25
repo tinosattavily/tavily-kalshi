@@ -30,7 +30,7 @@ interface UseAnalysisSubmitOptions {
 
 interface UseAnalysisSubmitReturn {
   handleSubmit: () => Promise<void>;
-  handleSelectMarket: (marketSlug: string) => Promise<void>;
+  handleSelectMarket: (marketId: string) => Promise<void>;
 }
 
 /**
@@ -143,13 +143,13 @@ export function useAnalysisSubmit({
     }
   }, [url, isSubmitting, resetState, buildRequestConfig, validateAndSetRunId, startPolling, setRunId, initializeResults, showToast, setIsSubmitting]);
 
-  const handleSelectMarket = useCallback(async (marketSlug: string) => {
+  const handleSelectMarket = useCallback(async (marketId: string) => {
     resetState();
 
     try {
       const body = {
         market_url: url.trim(),
-        selected_market_slug: marketSlug,
+        selected_market_id: marketId,
         configuration: buildRequestConfig(),
       };
 

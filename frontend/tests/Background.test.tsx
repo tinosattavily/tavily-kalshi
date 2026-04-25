@@ -124,8 +124,8 @@ describe("Dashboard Component", () => {
               market: "done",
             },
             market_options: [
-              { slug: "market-1", question: "Market 1?" },
-              { slug: "market-2", question: "Market 2?" },
+              { venue: "kalshi", market_id: "AAA-1", label: "Market 1?" },
+              { venue: "kalshi", market_id: "AAA-2", label: "Market 2?" },
             ],
             // Empty market_snapshot triggers market selection
             market_snapshot: {},
@@ -511,7 +511,7 @@ describe("Dashboard Component", () => {
             run_id: "test-run-id",
             status: { market: "done" },
             market_options: [
-              { slug: "market-1", question: "Market 1?" },
+              { venue: "kalshi", market_id: "AAA-1", label: "Market 1?" },
             ],
             market_snapshot: {},
           },
@@ -557,7 +557,7 @@ describe("Dashboard Component", () => {
       const analyzeStartCall = calls.find((call: [string, { method?: string; body?: string }?]) => 
         call[0] === "/api/analyze/start" && 
         call[1]?.method === "POST" &&
-        call[1]?.body?.includes("selected_market_slug")
+        call[1]?.body?.includes('"selected_market_id":"AAA-1"')
       );
       expect(analyzeStartCall).toBeDefined();
     }, { timeout: 10000 });
@@ -578,7 +578,7 @@ describe("Dashboard Component", () => {
             run_id: "test-run-id",
             status: { market: "done" },
             market_options: [
-              { slug: "market-1", question: "Market 1?" },
+              { venue: "kalshi", market_id: "AAA-1", label: "Market 1?" },
             ],
             market_snapshot: {},
           },
@@ -1014,7 +1014,7 @@ describe("Dashboard Component", () => {
             status: { market: "done" },
             market_snapshot: { question: "Test?", yes_price: 0.5 },
             market_options: [
-              { slug: "market-1", question: "Market 1?" },
+              { venue: "kalshi", market_id: "AAA-1", label: "Market 1?" },
             ],
           },
         }),
@@ -1133,7 +1133,7 @@ describe("Dashboard Component", () => {
     }, { timeout: 3000 });
   });
 
-  test("sets selectedMarketSlug when market_snapshot.slug exists", async () => {
+  test("sets selectedMarketId when market_snapshot.market_id exists", async () => {
     const user = userEvent.setup();
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
@@ -1146,7 +1146,8 @@ describe("Dashboard Component", () => {
           run: {
             run_id: "test-run-id",
             status: { market: "done", news: "done", signal: "done", report: "done" },
-            market_snapshot: { question: "Test?", slug: "test-market-slug" },
+            selected_market_id: "test-market-id",
+            market_snapshot: { question: "Test?", market_id: "test-market-id", slug: "test-market-slug" },
           },
         }),
       });

@@ -9,30 +9,10 @@ from app.config import get_logger
 from app.infrastructure.database.repositories import (
     get_run_async,
     list_recent_runs_async,
-    list_runs_by_market_async,
 )
 
 logger = get_logger(__name__)
 router = APIRouter()
-
-
-@router.get("/runs", response_model=RunResponse)
-async def list_runs(market_id: str = Query(..., description="MongoDB ObjectId for the market")):
-    """List runs for a given market ID."""
-    logger.debug("Listing runs for market", market_id=market_id)
-    try:
-        runs = await list_runs_by_market_async(market_id)
-        logger.info("Runs retrieved", market_id=market_id, count=len(runs))
-        return RunResponse(market_id=market_id, runs=runs)
-    except ValueError as exc:
-        logger.warning("Invalid market ID", market_id=market_id, error=str(exc))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except Exception as exc:
-        logger.error("Failed to list runs", market_id=market_id, error=str(exc), exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve runs. Please try again later.",
-        ) from exc
 
 
 @router.get("/runs/recent", response_model=RunResponse)

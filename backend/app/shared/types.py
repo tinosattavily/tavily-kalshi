@@ -26,6 +26,10 @@ class StrategyParams(TypedDict, total=False):
 
 class EventDocument(TypedDict, total=False):
     _id: ObjectId
+    venue: str
+    raw_url: str
+    canonical_url: str
+    venue_event_id: str
     gamma_event_id: str
     slug: str
     title: str
@@ -40,6 +44,11 @@ class EventDocument(TypedDict, total=False):
 class MarketDocument(TypedDict, total=False):
     _id: ObjectId
     event_id: ObjectId
+    venue: str
+    raw_url: str
+    canonical_url: str
+    venue_market_id: str
+    venue_event_id: str
     gamma_market_id: str
     slug: str
     polymarket_url: str
@@ -133,6 +142,12 @@ class RunDocument(TypedDict, total=False):
     _id: ObjectId
     market_id: ObjectId
     event_id: ObjectId
+    venue: str
+    raw_url: str
+    canonical_url: str
+    venue_market_id: str
+    venue_event_id: str
+    selected_market_id: str
     polymarket_url: str
     slug: str
     run_at: str

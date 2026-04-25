@@ -12,6 +12,17 @@ from app.domains.analysis.calculations import (
 )
 
 
+def test_decimal_analysis_module_does_not_export_cents_helpers():
+    import app.domains.analysis.calculations as calculations
+
+    exported = dir(calculations)
+    assert "infer_market_prob_cents" not in exported
+    assert "compute_edge_cents" not in exported
+    assert "kelly_fraction_yes_cents" not in exported
+    assert "kelly_fraction_no_cents" not in exported
+    assert "clamp_prob_cents" not in exported
+
+
 def test_clamp_prob_in_range():
     """Test clamp_prob with values in range."""
     assert clamp_prob(0.5) == 0.5

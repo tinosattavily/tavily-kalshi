@@ -182,6 +182,26 @@ async def test_analyze_start_endpoint():
 
 
 @pytest.mark.anyio(backend="asyncio")
+async def test_analyze_start_accepts_kalshi_url():
+    """Test /analyze/start accepts Kalshi URLs."""
+    payload = AnalyzeRequest(
+        market_url="https://kalshi.com/markets/INXD-25JAN17-B24999",
+        horizon="24h",
+    )
+
+    with (
+        patch("app.api.routes.analyze.init_run_document_async") as mock_init,
+        patch("app.api.routes.analyze.run_analysis_for_run_id"),
+    ):
+        mock_init.return_value = AsyncMock()
+
+        response = client.post("/api/analyze/start", json=payload.model_dump(mode="json"))
+
+        assert response.status_code == 200
+        assert "run_id" in response.json()
+
+
+@pytest.mark.anyio(backend="asyncio")
 async def test_analyze_start_request_too_large():
     """Test /analyze/start endpoint with request too large."""
     payload = AnalyzeRequest(

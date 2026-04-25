@@ -18,7 +18,38 @@ class TestFetchKalshi:
             from app.shared.exceptions import KalshiAuthenticationError
 
             with pytest.raises(KalshiAuthenticationError):
-                await fetch_kalshi("GET", "/markets/TEST")
+                await fetch_kalshi("GET", "/markets/TEST", require_auth=True)
+
+    @pytest.mark.asyncio
+    async def test_fetch_kalshi_public_get_does_not_require_auth(self, monkeypatch):
+        monkeypatch.setattr(
+            "app.infrastructure.http.kalshi.is_kalshi_auth_available",
+            lambda: False,
+        )
+
+        class Response:
+            status_code = 200
+            text = "{}"
+
+            def json(self):
+                return {"market": {"ticker": "TEST"}}
+
+        class Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return None
+
+            async def request(self, **kwargs):
+                assert "KALSHI-ACCESS-KEY" not in kwargs["headers"]
+                return Response()
+
+        from app.infrastructure.http.kalshi import fetch_kalshi
+
+        monkeypatch.setattr("httpx.AsyncClient", lambda timeout: Client())
+        result = await fetch_kalshi("GET", "/markets/TEST", use_cache=False)
+        assert result["market"]["ticker"] == "TEST"
 
     @pytest.mark.asyncio
     async def test_returns_cached_response_on_cache_hit(self):

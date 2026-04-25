@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -44,9 +44,29 @@ async def ensure_indexes_async() -> None:
     runs_coll = await runs_collection_async()
     traces_coll = await traces_collection_async()
 
-    await events_coll.create_index("slug", unique=True)
-    await markets_coll.create_index("slug", unique=True)
-    await markets_coll.create_index("polymarket_url", unique=True)
+    await events_coll.create_index([("venue", 1), ("venue_event_id", 1)], unique=True)
+    await markets_coll.create_index([("venue", 1), ("venue_market_id", 1)], unique=True)
+    await events_coll.create_index(
+        "slug",
+        unique=True,
+        partialFilterExpression={
+            "venue": "polymarket",
+            "slug": {"$exists": True, "$type": "string"},
+        },
+    )
+    await markets_coll.create_index(
+        "slug",
+        unique=True,
+        partialFilterExpression={
+            "venue": "polymarket",
+            "slug": {"$exists": True, "$type": "string"},
+        },
+    )
+    await markets_coll.create_index(
+        "polymarket_url",
+        unique=True,
+        partialFilterExpression={"polymarket_url": {"$exists": True, "$type": "string"}},
+    )
     await markets_coll.create_index("event_id")
     await runs_coll.create_index([("market_id", 1), ("run_at", -1)])
     await runs_coll.create_index([("event_id", 1), ("run_at", -1)])
@@ -58,8 +78,14 @@ async def ensure_indexes_async() -> None:
 async def upsert_event_async(doc: EventDocument) -> EventDocument:
     """Upsert an event document (async)."""
     await ensure_indexes_async()
-    slug = doc.get("slug")
-    if not slug:
+    venue = doc.get("venue")
+    venue_event_id = doc.get("venue_event_id")
+    filter_doc: dict[str, Any]
+    if venue and venue_event_id:
+        filter_doc = {"venue": venue, "venue_event_id": venue_event_id}
+    elif slug := doc.get("slug"):
+        filter_doc = {"slug": slug}
+    else:
         raise ValueError("Event slug is required to upsert.")
 
     insert_doc = {k: v for k, v in doc.items() if k != "updated_at"}
@@ -68,7 +94,7 @@ async def upsert_event_async(doc: EventDocument) -> EventDocument:
 
     collection = await events_collection_async()
     result = await collection.find_one_and_update(
-        {"slug": slug},
+        filter_doc,
         {"$setOnInsert": insert_doc, "$set": update_doc},
         upsert=True,
         return_document=ReturnDocument.AFTER,
@@ -79,8 +105,14 @@ async def upsert_event_async(doc: EventDocument) -> EventDocument:
 async def upsert_market_async(doc: MarketDocument) -> MarketDocument:
     """Upsert a market document (async)."""
     await ensure_indexes_async()
-    slug = doc.get("slug")
-    if not slug:
+    venue = doc.get("venue")
+    venue_market_id = doc.get("venue_market_id")
+    filter_doc: dict[str, Any]
+    if venue and venue_market_id:
+        filter_doc = {"venue": venue, "venue_market_id": venue_market_id}
+    elif slug := doc.get("slug"):
+        filter_doc = {"slug": slug}
+    else:
         raise ValueError("Market slug is required to upsert.")
 
     insert_doc = {k: v for k, v in doc.items() if k != "updated_at"}
@@ -89,7 +121,7 @@ async def upsert_market_async(doc: MarketDocument) -> MarketDocument:
 
     collection = await markets_collection_async()
     result = await collection.find_one_and_update(
-        {"slug": slug},
+        filter_doc,
         {"$setOnInsert": insert_doc, "$set": update_doc},
         upsert=True,
         return_document=ReturnDocument.AFTER,
@@ -158,21 +190,6 @@ async def get_run_async(run_id: str) -> Optional[Dict[str, Any]]:
         logger = get_logger(__name__)
         logger.error("Error retrieving run", run_id=run_id, error=str(e), exc_info=True)
         raise RuntimeError("Failed to retrieve run") from e
-
-
-async def list_runs_by_market_async(market_id: str) -> List[Dict[str, Any]]:
-    """List runs for a market (async)."""
-    await ensure_indexes_async()
-    try:
-        market_object_id = ObjectId(market_id)
-    except (InvalidId, TypeError) as err:
-        raise ValueError("market_id must be a valid ObjectId string.") from err
-
-    collection = await runs_collection_async()
-    cursor = collection.find({"market_id": market_object_id}).sort("run_at", -1)
-    from app.infrastructure.database.utils import serialize_document
-
-    return [serialize_document(doc) async for doc in cursor]
 
 
 async def list_recent_runs_async(limit: int = 20) -> List[Dict[str, Any]]:

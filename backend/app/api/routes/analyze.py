@@ -11,17 +11,50 @@ from app.api.schemas.common import ErrorResponse
 from app.api.schemas.requests import AnalyzeRequest
 from app.api.schemas.responses import MarketSelectionResponse
 from app.config import get_logger
+from app.domains.markets.canonicalization import detect_venue
 from app.infrastructure.http.resilience import openai_circuit
 from app.orchestration.graph import run_analysis_graph
+from app.orchestration.initial_state import build_initial_state
 from app.orchestration.phased import run_analysis_for_run_id
 from app.orchestration.snapshot import init_run_document_async, persist_run_snapshot_async
-from app.orchestration.state import AgentState
+from app.shared.exceptions import (
+    EventNotFoundError,
+    MarketNotFoundError,
+    UnsupportedVenueError,
+    VenueUrlParseError,
+)
 
 logger = get_logger(__name__)
 router = APIRouter()
 
 # Request size limit: 1MB
 MAX_REQUEST_SIZE = 1024 * 1024
+
+
+def _clear_structlog_context() -> None:
+    try:
+        import structlog
+    except ImportError:
+        return
+    structlog.contextvars.clear_contextvars()
+
+
+def _raise_venue_http_error(exc: Exception) -> None:
+    if isinstance(exc, UnsupportedVenueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "UnsupportedVenue", "detail": str(exc)},
+        ) from exc
+    if isinstance(exc, VenueUrlParseError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "VenueUrlParseError", "detail": str(exc)},
+        ) from exc
+    if isinstance(exc, (MarketNotFoundError, EventNotFoundError)):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": type(exc).__name__, "detail": str(exc)},
+        ) from exc
 
 
 @router.post(
@@ -36,6 +69,7 @@ MAX_REQUEST_SIZE = 1024 * 1024
 )
 async def analyze(request: Request, payload: AnalyzeRequest) -> dict[str, Any]:
     """Run the multi-agent analysis for a given market + strategy params."""
+    _clear_structlog_context()
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > MAX_REQUEST_SIZE:
         logger.warning("Request too large", size=content_length, limit=MAX_REQUEST_SIZE)
@@ -54,29 +88,7 @@ async def analyze(request: Request, payload: AnalyzeRequest) -> dict[str, Any]:
     )
 
     try:
-        config = payload.configuration
-        strategy_params = payload.strategy_params or {}
-        if config and config.min_confidence:
-            strategy_params = {**strategy_params, "min_confidence": config.min_confidence}
-
-        state_dict: AgentState = {
-            "market_url": str(payload.market_url),
-            "polymarket_url": str(payload.market_url),
-            "selected_market_slug": payload.selected_market_slug,
-            "horizon": payload.horizon or "24h",
-            "strategy_preset": payload.strategy_preset or "Balanced",
-            "strategy_params": strategy_params,
-            "config": {
-                "use_tavily_prompt_agent": config.use_tavily_prompt_agent if config else True,
-                "use_news_summary_agent": config.use_news_summary_agent if config else True,
-                "max_articles": config.max_articles if config else 15,
-                "max_articles_per_query": config.max_articles_per_query if config else 8,
-                "min_confidence": config.min_confidence if config else "medium",
-                "enable_sentiment_analysis": config.enable_sentiment_analysis if config else True,
-            }
-            if config
-            else {},
-        }
+        state_dict = build_initial_state(payload)
 
         logger.debug("Starting analysis graph", request_id=request_id)
         state = await run_analysis_graph(state_dict)
@@ -143,6 +155,8 @@ async def analyze(request: Request, payload: AnalyzeRequest) -> dict[str, Any]:
 
     except HTTPException:
         raise
+    except (UnsupportedVenueError, VenueUrlParseError, MarketNotFoundError, EventNotFoundError) as exc:
+        _raise_venue_http_error(exc)
     except ValueError as exc:
         logger.warning("Validation error in analysis", request_id=request_id, error=str(exc))
         raise HTTPException(
@@ -181,6 +195,7 @@ async def analyze_start(
     background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
     """Start a phased analysis in the background and return a run_id immediately."""
+    _clear_structlog_context()
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > MAX_REQUEST_SIZE:
         logger.warning("Request too large", size=content_length, limit=MAX_REQUEST_SIZE)
@@ -202,12 +217,26 @@ async def analyze_start(
         run_id = f"run-{uuid4().hex}"
 
         try:
+            venue = detect_venue(str(payload.market_url))
+        except UnsupportedVenueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "UnsupportedVenue", "detail": str(exc)},
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "UnsupportedVenue", "detail": str(exc)},
+            ) from exc
+
+        try:
             await init_run_document_async(
                 run_id=run_id,
                 market_url=str(payload.market_url),
                 horizon=payload.horizon or "24h",
                 strategy_preset=payload.strategy_preset or "Balanced",
                 strategy_params=payload.strategy_params or {},
+                venue=venue,
             )
             logger.debug("Run document initialized", request_id=request_id, run_id=run_id)
         except Exception as db_error:

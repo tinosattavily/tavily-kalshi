@@ -75,6 +75,42 @@ async def test_run_analysis_for_run_id_market_selection():
 
 
 @pytest.mark.anyio(backend="asyncio")
+async def test_run_analysis_for_run_id_includes_selected_market_id():
+    """Test phased initial state includes venue-neutral selected market id."""
+    req = AnalyzeRequest(
+        market_url="https://kalshi.com/events/INXD-25JAN17",
+        selected_market_id="INXD-25JAN17-B24999",
+    )
+
+    captured_state = {}
+
+    async def fake_graph(state):
+        captured_state.update(state)
+        return {
+            **state,
+            "market_snapshot": {},
+            "event_context": {},
+            "news_context": {},
+            "signal": {},
+            "decision": {},
+            "report": {},
+        }
+
+    with (
+        patch("app.orchestration.phased.run_analysis_graph", side_effect=fake_graph),
+        patch("app.orchestration.phased.update_run_phase_async") as mock_update,
+        patch("app.orchestration.phased.update_run_with_event_and_market_async"),
+        patch("app.orchestration.phased.persist_run_snapshot_async"),
+    ):
+        mock_update.return_value = AsyncMock()
+
+        await run_analysis_for_run_id("test-run", req)
+
+    assert captured_state["venue"] == "kalshi"
+    assert captured_state["selected_market_id"] == "INXD-25JAN17-B24999"
+
+
+@pytest.mark.anyio(backend="asyncio")
 async def test_run_analysis_for_run_id_error_handling():
     """Test run_analysis_for_run_id error handling."""
     req = AnalyzeRequest(

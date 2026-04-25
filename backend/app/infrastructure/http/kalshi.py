@@ -27,8 +27,9 @@ async def fetch_kalshi(
     params: Optional[Dict[str, Any]] = None,
     use_cache: bool = True,
     cache_ttl: int = 60,
+    require_auth: bool = False,
 ) -> Dict[str, Any]:
-    """Make authenticated request to Kalshi API.
+    """Make request to Kalshi API, authenticating only when required.
 
     Args:
         method: HTTP method
@@ -36,6 +37,7 @@ async def fetch_kalshi(
         params: Query parameters
         use_cache: Whether to use response cache (GET only)
         cache_ttl: Cache TTL in seconds
+        require_auth: Whether to sign the request with Kalshi credentials
 
     Returns:
         Parsed JSON response
@@ -44,24 +46,28 @@ async def fetch_kalshi(
         KalshiAuthenticationError: If auth not configured or fails
         KalshiAPIError: For other API errors
     """
-    if not is_kalshi_auth_available():
-        raise KalshiAuthenticationError("Kalshi API credentials not configured")
-
     full_path = f"/trade-api/v2{path}"
-    url = f"{settings.kalshi_base_url}{path}"
+    base_url = (
+        settings.kalshi_authenticated_base_url
+        if require_auth
+        else settings.kalshi_public_base_url
+    )
+    url = f"{base_url}{path}"
 
     # Check cache for GET requests
-    cache_key = f"kalshi:{method}:{path}:{params}"
+    cache_key = f"kalshi:{method}:{path}:{params}:auth={require_auth}"
     if method == "GET" and use_cache:
         cached = kalshi_cache.get(cache_key)
         if cached is not None:
             logger.debug("Kalshi cache hit", path=path)
             return cached
 
-    # Get auth headers (sign with full path, no query params)
-    headers = get_auth_headers(method, full_path)
-    headers["Accept"] = "application/json"
-    headers["Content-Type"] = "application/json"
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if require_auth:
+        if not is_kalshi_auth_available():
+            raise KalshiAuthenticationError("Kalshi API credentials not configured")
+        # Sign with full path, no query params.
+        headers.update(get_auth_headers(method, full_path))
 
     try:
         async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:

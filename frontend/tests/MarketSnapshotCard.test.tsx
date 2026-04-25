@@ -40,6 +40,22 @@ describe("MarketCard", () => {
     expect(screen.getByText("Test Event")).toBeInTheDocument();
   });
 
+  test("renders without comment counts", () => {
+    render(
+      <MarketCard
+        {...defaultProps}
+        venue="kalshi"
+        question="A?"
+        commentCount={null}
+        eventCommentCount={null}
+        seriesCommentCount={null}
+      />
+    );
+
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Kalshi").length).toBeGreaterThan(0);
+  });
+
   test("formats prices correctly", () => {
     render(
       <MarketCard
@@ -111,8 +127,8 @@ describe("MarketCard", () => {
   test("handles market selection", () => {
     const onMarketSelect = jest.fn();
     const previousMarkets = [
-      { slug: "market-1", question: "Market 1?" },
-      { slug: "market-2", question: "Market 2?" },
+      { market_id: "market-1", slug: "market-1", question: "Market 1?" },
+      { market_id: "market-2", slug: "market-2", question: "Market 2?" },
     ];
     
     render(
@@ -121,7 +137,7 @@ describe("MarketCard", () => {
         question="Test?"
         previousMarkets={previousMarkets}
         onMarketSelect={onMarketSelect}
-        activeMarketSlug="market-1"
+        activeMarketId="market-1"
       />
     );
     
@@ -190,8 +206,8 @@ describe("MarketCard", () => {
   test("handles market dropdown hover and mouse leave", () => {
     const onMarketSelect = jest.fn();
     const previousMarkets = [
-      { slug: "market-1", question: "Market 1?" },
-      { slug: "market-2", question: "Market 2?" },
+      { market_id: "market-1", slug: "market-1", question: "Market 1?" },
+      { market_id: "market-2", slug: "market-2", question: "Market 2?" },
     ];
     
     render(

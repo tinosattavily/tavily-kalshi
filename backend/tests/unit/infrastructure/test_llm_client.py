@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.infrastructure.llm.client import OpenAIClient, get_openai_client
+from app.infrastructure.llm.client import OpenAIClient, build_signal_cache_key, get_openai_client
 
 
 @patch("app.infrastructure.llm.client.openai")
@@ -63,6 +63,50 @@ def test_openai_client_init_not_installed(mock_settings):
     client = OpenAIClient()
 
     assert client.client is None
+
+
+def test_signal_cache_key_includes_venue():
+    kalshi = build_signal_cache_key(
+        "kalshi", "AAA", "Event", "Question?", 0.42, "Summary", "Headline"
+    )
+    poly = build_signal_cache_key(
+        "polymarket", "AAA", "Event", "Question?", 0.42, "Summary", "Headline"
+    )
+    assert kalshi != poly
+
+
+@patch("app.infrastructure.llm.client.openai_cache")
+@patch("app.infrastructure.llm.client.openai_circuit")
+def test_generate_signal_prompt_is_venue_neutral(mock_circuit, mock_cache):
+    mock_circuit.can_attempt.return_value = True
+    mock_cache.get.return_value = None
+
+    client = OpenAIClient()
+    client.api_key = "test-key"
+    client.client = MagicMock()
+    client._use_new_api = True
+
+    mock_completion = MagicMock()
+    mock_completion.choices = [MagicMock()]
+    mock_completion.choices[0].message.content = json.dumps(
+        {"model_prob_abs": 0.6, "direction": "up", "confidence": "high", "rationale": "Test"}
+    )
+    client.client.chat.completions.create = MagicMock(return_value=mock_completion)
+    mock_circuit.record_success = MagicMock()
+
+    client._generate_signal_sync(
+        "Test Event",
+        "Will this test pass?",
+        0.5,
+        "Test summary",
+        "Headline 1",
+        "Test label",
+    )
+
+    messages = client.client.chat.completions.create.call_args.kwargs["messages"]
+    user_message = next(message["content"] for message in messages if message["role"] == "user")
+    assert "Current Polymarket YES price" not in user_message
+    assert "Current market YES price" in user_message
 
 
 @patch("app.infrastructure.llm.client.openai_cache")

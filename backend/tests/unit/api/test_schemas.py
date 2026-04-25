@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+from pydantic import ValidationError as PydanticValidationError
 
 from app.api.schemas.common import ErrorResponse, HealthResponse
 from app.api.schemas.requests import AnalyzeRequest
@@ -63,12 +64,40 @@ def test_analyze_request_validation():
     assert request.horizon == "24h"
 
 
+def test_analyze_request_accepts_polymarket_url():
+    req = AnalyzeRequest(market_url="https://polymarket.com/event/fed-decision")
+    assert str(req.market_url).startswith("https://polymarket.com")
+
+
+def test_analyze_request_accepts_kalshi_url():
+    req = AnalyzeRequest(market_url="https://kalshi.com/markets/INXD-25JAN17-B24999")
+    assert str(req.market_url).startswith("https://kalshi.com")
+
+
 def test_analyze_request_invalid_url():
     """Test AnalyzeRequest with invalid URL (not Polymarket)."""
     with pytest.raises(ValidationError):
         AnalyzeRequest(
             market_url="https://example.com/market/test",  # Not Polymarket
         )
+
+
+def test_analyze_request_rejects_unknown_url():
+    try:
+        AnalyzeRequest(market_url="https://example.com/event/foo")
+    except PydanticValidationError as exc:
+        assert "Kalshi" in str(exc)
+        assert "Polymarket" in str(exc)
+    else:
+        raise AssertionError("expected validation error")
+
+
+def test_analyze_request_accepts_selected_market_id():
+    req = AnalyzeRequest(
+        market_url="https://polymarket.com/event/fed-decision",
+        selected_market_id="fed-decision-yes",
+    )
+    assert req.selected_market_id == "fed-decision-yes"
 
 
 def test_market_selection_response():

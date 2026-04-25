@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 from bson import ObjectId
 
+from app.domains.markets.canonicalization import canonicalize_url, detect_venue
 from app.infrastructure.database.repositories import (
     attach_trace_to_run_async,
     create_run_async,
@@ -22,10 +23,13 @@ def build_event_document(state: AgentState, timestamp: str) -> EventDocument:
     event_state = state.get("event", {})
     updated_at = event_state.get("updated_at") or timestamp
     created_at = event_state.get("created_at") or updated_at
+    venue = state.get("venue")
+    venue_event_id = state.get("event_id") or event_state.get("event_ticker")
 
-    return {
+    doc: EventDocument = {
         "gamma_event_id": event_state.get("gamma_event_id")
         or state.get("gamma_event_id")
+        or venue_event_id
         or "unknown-event",
         "slug": event_state.get("slug") or state.get("event_slug") or "unknown-event",
         "title": (
@@ -42,24 +46,33 @@ def build_event_document(state: AgentState, timestamp: str) -> EventDocument:
         "created_at": created_at,
         "updated_at": updated_at,
     }
+    if venue:
+        doc["venue"] = venue
+    if state.get("raw_url"):
+        doc["raw_url"] = state["raw_url"]
+    if state.get("canonical_url"):
+        doc["canonical_url"] = state["canonical_url"]
+    if venue_event_id:
+        doc["venue_event_id"] = venue_event_id
+    return doc
 
 
 def build_market_document(state: AgentState, timestamp: str, event_id: ObjectId) -> MarketDocument:
     market_state = state.get("market", {})
     updated_at = market_state.get("updated_at") or timestamp
     created_at = market_state.get("created_at") or updated_at
-    slug = market_state.get("slug") or state.get("slug") or "unknown-market"
+    venue = state.get("venue")
+    venue_market_id = state.get("market_id") or market_state.get("ticker")
+    venue_event_id = state.get("event_id") or market_state.get("event_ticker")
+    slug = market_state.get("slug") or state.get("slug") or venue_market_id or "unknown-market"
 
-    return {
+    doc: MarketDocument = {
         "event_id": event_id,
         "gamma_market_id": market_state.get("gamma_market_id")
         or state.get("gamma_market_id")
+        or venue_market_id
         or f"market-{slug}",
         "slug": slug,
-        "polymarket_url": market_state.get("polymarket_url")
-        or state.get("polymarket_url")
-        or state.get("market_url")
-        or "",
         "question": (
             market_state.get("question") or state.get("market_snapshot", {}).get("question", "")
         ),
@@ -71,6 +84,24 @@ def build_market_document(state: AgentState, timestamp: str, event_id: ObjectId)
         "created_at": created_at,
         "updated_at": updated_at,
     }
+    polymarket_url = (
+        market_state.get("polymarket_url")
+        or state.get("polymarket_url")
+        or (state.get("market_url") if venue in (None, "polymarket") else None)
+    )
+    if polymarket_url:
+        doc["polymarket_url"] = polymarket_url
+    if venue:
+        doc["venue"] = venue
+    if state.get("raw_url"):
+        doc["raw_url"] = state["raw_url"]
+    if state.get("canonical_url"):
+        doc["canonical_url"] = state["canonical_url"]
+    if venue_market_id:
+        doc["venue_market_id"] = venue_market_id
+    if venue_event_id:
+        doc["venue_event_id"] = venue_event_id
+    return doc
 
 
 def build_run_document(
@@ -90,6 +121,9 @@ def build_run_document(
     decision = state.get("decision") or {}
     report = state.get("report") or {}
     env = state.get("env") or {}
+    venue = state.get("venue")
+    venue_market_id = state.get("market_id")
+    venue_event_id = state.get("event_id")
 
     # Serialize signal - handle both Pydantic model and dict
     if hasattr(signal_raw, "model_dump"):
@@ -108,7 +142,6 @@ def build_run_document(
     run_doc: RunDocument = {
         "market_id": market_id,
         "event_id": event_id,
-        "polymarket_url": state.get("polymarket_url") or state.get("market_url") or "",
         "slug": state.get("slug") or market_snapshot.get("slug", "unknown-market"),
         "run_at": state.get("run_at") or timestamp,
         "horizon": state.get("horizon") or "24h",
@@ -124,6 +157,23 @@ def build_run_document(
         "created_at": timestamp,
         "updated_at": timestamp,
     }
+    polymarket_url = state.get("polymarket_url") or (
+        state.get("market_url") if venue in (None, "polymarket") else None
+    )
+    if polymarket_url:
+        run_doc["polymarket_url"] = polymarket_url
+    if venue:
+        run_doc["venue"] = venue
+    if state.get("raw_url"):
+        run_doc["raw_url"] = state["raw_url"]
+    if state.get("canonical_url"):
+        run_doc["canonical_url"] = state["canonical_url"]
+    if venue_market_id:
+        run_doc["venue_market_id"] = venue_market_id
+    if venue_event_id:
+        run_doc["venue_event_id"] = venue_event_id
+    if state.get("selected_market_id"):
+        run_doc["selected_market_id"] = state["selected_market_id"]
     return run_doc
 
 
@@ -184,14 +234,19 @@ async def init_run_document_async(
     horizon: str = "24h",
     strategy_preset: str = "Balanced",
     strategy_params: dict[str, Any] | None = None,
+    venue: str | None = None,
 ) -> ObjectId:
     """Initialize a run document with pending statuses for phased execution."""
     timestamp = _utc_now_iso()
+    resolved_venue = venue or detect_venue(market_url)
+    canonical_url = canonicalize_url(market_url)
 
     # Create a minimal run document with pending statuses
     run_doc: RunDocument = {
         "run_id": run_id,
-        "polymarket_url": market_url,
+        "venue": resolved_venue,
+        "raw_url": market_url,
+        "canonical_url": canonical_url,
         "slug": "pending",  # Will be updated when market is fetched
         "run_at": timestamp,
         "horizon": horizon,
@@ -217,6 +272,8 @@ async def init_run_document_async(
             "report": "pending",
         },
     }
+    if resolved_venue == "polymarket":
+        run_doc["polymarket_url"] = market_url
 
     run_object_id = await create_run_async(run_doc)
     return run_object_id

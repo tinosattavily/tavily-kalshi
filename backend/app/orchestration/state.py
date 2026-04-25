@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
+from app.domains.markets.adapters.base import Venue
 from app.shared.types import (
     Decision,
     EventContext,
@@ -39,6 +40,12 @@ class AgentState(TypedDict, total=False):
 
     run_id: str
     run_at: str
+    venue: Venue
+    raw_url: str
+    canonical_url: str
+    market_id: str
+    event_id: str
+    selected_market_id: str
     gamma_event_id: str
     gamma_market_id: str
     market_url: str
@@ -78,7 +85,3 @@ class AgentState(TypedDict, total=False):
     event_ticker: str  # Kalshi event ticker (e.g., "INXD-25JAN17")
     selected_ticker: str  # Selected market ticker (for multi-market events)
     available_markets: list[dict[str, Any]]  # List of markets for selection UI
-    # Cents-based probability (1-99)
-    model_probability_cents: int  # Model's probability estimate in cents
-    market_probability_cents: int  # Current market price in cents
-    edge_cents: int  # Edge (model - market) in cents
