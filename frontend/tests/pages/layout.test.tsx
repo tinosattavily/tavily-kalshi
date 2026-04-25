@@ -3,23 +3,39 @@ import React from "react";
 import RootLayout from "../../app/layout";
 import { Providers } from "../../components/Providers";
 
-// Mock next/font/google
+// Mock next/font/google. RootLayout now imports both Geist and Geist_Mono.
 jest.mock("next/font/google", () => ({
-  Inter: jest.fn(() => ({
-    className: "inter-font-class",
-    style: {},
+  Geist: jest.fn(() => ({
+    variable: "mock-geist-sans",
+    className: "mock-geist-sans",
+    style: { fontFamily: "mock-geist-sans" },
+  })),
+  Geist_Mono: jest.fn(() => ({
+    variable: "mock-geist-mono",
+    className: "mock-geist-mono",
+    style: { fontFamily: "mock-geist-mono" },
   })),
 }));
+
+// Mock the theme cookie helper so tests don't try to read real cookies.
+jest.mock("../../lib/theme-cookie", () => ({
+  getServerTheme: jest.fn(async () => null),
+  THEME_COOKIE: "prophily-theme",
+}), { virtual: true });
 
 // Mock globals.css import
 jest.mock("../../app/globals.css", () => ({}));
 
 describe("RootLayout", () => {
-  const renderLayout = (children: React.ReactNode) =>
-    RootLayout({ children }) as React.ReactElement;
+  const renderLayout = async (children: React.ReactNode) =>
+    (await RootLayout({ children })) as React.ReactElement;
 
-  const getBodyElement = (layout: React.ReactElement) =>
-    layout.props.children as React.ReactElement;
+  const getBodyElement = (layout: React.ReactElement) => {
+    const childArray = React.Children.toArray(layout.props.children) as React.ReactElement[];
+    const body = childArray.find((c) => c?.type === "body");
+    if (!body) throw new Error("body element not found in layout");
+    return body;
+  };
 
   const getProvidersChildren = (bodyElement: React.ReactElement) => {
     // Body wraps children in Providers component
@@ -27,74 +43,87 @@ describe("RootLayout", () => {
     return providersElement.props.children;
   };
 
-  test("renders html element with lang attribute", () => {
-    const layout = renderLayout(<div>Test Content</div>);
+  test("renders html element with lang attribute", async () => {
+    const layout = await renderLayout(<div>Test Content</div>);
     expect(layout.type).toBe("html");
     expect(layout.props.lang).toBe("en");
   });
 
-  test("renders body element with font class", () => {
-    const layout = renderLayout(<div>Test Content</div>);
-    const bodyElement = getBodyElement(layout);
-    expect(bodyElement.type).toBe("body");
-    expect(bodyElement.props.className).toBe("inter-font-class");
+  test("renders html with data-theme attribute", async () => {
+    const layout = await renderLayout(<div>Test Content</div>);
+    expect(layout.props["data-theme"]).toBeDefined();
+    expect(["atelier", "obsidian"]).toContain(layout.props["data-theme"]);
   });
 
-  test("wraps children with Providers", () => {
-    const layout = renderLayout(<div>Test Content</div>);
+  test("renders body element with both Geist font variables in className", async () => {
+    const layout = await renderLayout(<div>Test Content</div>);
+    const bodyElement = getBodyElement(layout);
+    expect(bodyElement.type).toBe("body");
+    expect(bodyElement.props.className).toContain("mock-geist-sans");
+    expect(bodyElement.props.className).toContain("mock-geist-mono");
+  });
+
+  test("wraps children with Providers", async () => {
+    const layout = await renderLayout(<div>Test Content</div>);
     const bodyElement = getBodyElement(layout);
     const providersElement = bodyElement.props.children as React.ReactElement;
     expect(providersElement.type).toBe(Providers);
   });
 
-  test("renders children inside Providers", () => {
+  test("renders children inside Providers", async () => {
     const child = <div data-testid="child">Test Content</div>;
-    const layout = renderLayout(child);
+    const layout = await renderLayout(child);
     const bodyElement = getBodyElement(layout);
     const childrenInProviders = getProvidersChildren(bodyElement);
     expect(childrenInProviders).toEqual(child);
   });
 
-  test("renders multiple children inside Providers", () => {
+  test("renders multiple children inside Providers", async () => {
     const children = [
       <div key="child1" data-testid="child1">Child 1</div>,
       <div key="child2" data-testid="child2">Child 2</div>,
     ];
-    const layout = renderLayout(children);
+    const layout = await renderLayout(children);
     const bodyElement = getBodyElement(layout);
     const childrenInProviders = getProvidersChildren(bodyElement);
     expect(childrenInProviders).toEqual(children);
   });
 
-  test("renders empty children inside Providers", () => {
-    const layout = renderLayout(null);
+  test("renders empty children inside Providers", async () => {
+    const layout = await renderLayout(null);
     const bodyElement = getBodyElement(layout);
     const childrenInProviders = getProvidersChildren(bodyElement);
     expect(childrenInProviders).toBeNull();
   });
 
   test("has correct metadata", () => {
-    // Metadata is exported but not directly testable in component render
-    // We can verify it exists by checking the export
+    // Metadata is exported but not directly testable in component render.
+    // We can verify it exists by checking the export.
     expect(RootLayout).toBeDefined();
   });
 
-  test("renders without errors", () => {
-    const layout = renderLayout(<div>Test</div>);
+  test("renders without errors", async () => {
+    const layout = await renderLayout(<div>Test</div>);
     expect(layout).toBeTruthy();
   });
 
-  test("applies Inter font configuration", () => {
+  test("applies Geist + Geist Mono font configuration", async () => {
     // eslint-disable-next-line no-undef
-    const { Inter } = require("next/font/google");
-    renderLayout(<div>Test</div>);
-    expect(Inter).toHaveBeenCalledWith({
+    const { Geist, Geist_Mono } = require("next/font/google");
+    await renderLayout(<div>Test</div>);
+    expect(Geist).toHaveBeenCalledWith({
       subsets: ["latin"],
       display: "swap",
+      variable: "--font-geist-sans",
+    });
+    expect(Geist_Mono).toHaveBeenCalledWith({
+      subsets: ["latin"],
+      display: "swap",
+      variable: "--font-geist-mono",
     });
   });
 
-  test("renders complex children structure inside Providers", () => {
+  test("renders complex children structure inside Providers", async () => {
     const children = (
       <>
         <header>
@@ -108,10 +137,9 @@ describe("RootLayout", () => {
         </footer>
       </>
     );
-    const layout = renderLayout(children);
+    const layout = await renderLayout(children);
     const bodyElement = getBodyElement(layout);
     const childrenInProviders = getProvidersChildren(bodyElement);
     expect(childrenInProviders).toEqual(children);
   });
 });
-
