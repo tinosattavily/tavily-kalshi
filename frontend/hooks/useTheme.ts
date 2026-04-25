@@ -32,7 +32,7 @@ export function useTheme(): {
     writeCookie(next);
     try {
       window.localStorage?.setItem(USER_OVERRIDE_FLAG, "1");
-    } catch (_e) {
+    } catch {
       // localStorage may be unavailable; cookie is still authoritative.
     }
     setThemeState(next);
@@ -45,7 +45,7 @@ export function useTheme(): {
       writeCookie(next);
       try {
         window.localStorage?.setItem(USER_OVERRIDE_FLAG, "1");
-      } catch (_e) {
+      } catch {
         // localStorage may be unavailable; cookie is still authoritative.
       }
       return next;
@@ -59,7 +59,7 @@ export function useTheme(): {
     const hasUserOverride = () => {
       try {
         return window.localStorage?.getItem(USER_OVERRIDE_FLAG) === "1";
-      } catch (_e) {
+      } catch {
         return false;
       }
     };
@@ -67,7 +67,7 @@ export function useTheme(): {
     if (hasUserOverride()) return;
 
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => {
+    const onChange = (e: { matches: boolean }) => {
       if (hasUserOverride()) return;
       const next: Theme = e.matches ? "obsidian" : "atelier";
       applyTheme(next);

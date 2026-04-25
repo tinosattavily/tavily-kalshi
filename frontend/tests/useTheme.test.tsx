@@ -14,22 +14,22 @@ function clearCookie() {
 beforeEach(() => {
   setHtmlTheme(null);
   clearCookie();
-  try { window.localStorage?.clear(); } catch (_) { /* noop */ }
+  try { window.localStorage?.clear(); } catch { /* noop */ }
 });
 
 describe("useTheme", () => {
-  it("returns the value of document.documentElement.dataset.theme on initial render", () => {
+  test("returns the value of document.documentElement.dataset.theme on initial render", () => {
     setHtmlTheme("obsidian");
     const { result } = renderHook(() => useTheme());
     expect(result.current.theme).toBe("obsidian");
   });
 
-  it("defaults to 'atelier' when no data-theme is set", () => {
+  test("defaults to 'atelier' when no data-theme is set", () => {
     const { result } = renderHook(() => useTheme());
     expect(result.current.theme).toBe("atelier");
   });
 
-  it("toggle() flips the data-theme attribute and writes a cookie", () => {
+  test("toggle() flips the data-theme attribute and writes a cookie", () => {
     setHtmlTheme("atelier");
     const { result } = renderHook(() => useTheme());
 
@@ -40,7 +40,7 @@ describe("useTheme", () => {
     expect(document.cookie).toContain(`${THEME_COOKIE}=obsidian`);
   });
 
-  it("setTheme writes the cookie and updates the attribute", () => {
+  test("setTheme writes the cookie and updates the attribute", () => {
     const { result } = renderHook(() => useTheme());
     act(() => result.current.setTheme("obsidian"));
 
@@ -48,10 +48,11 @@ describe("useTheme", () => {
     expect(document.cookie).toContain(`${THEME_COOKIE}=obsidian`);
   });
 
-  it("after setTheme, system preference changes are ignored", () => {
-    const originalMatchMedia = (window as Window & typeof globalThis).matchMedia;
+  test("after setTheme, system preference changes are ignored", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const originalMatchMedia = (window as any).matchMedia;
 
-    let mqlListener: ((e: MediaQueryListEvent) => void) | null = null;
+    let mqlListener: ((e: { matches: boolean }) => void) | null = null;
     const matchMedia = jest.fn().mockImplementation((q: string) => ({
       matches: false,
       media: q,
@@ -69,7 +70,7 @@ describe("useTheme", () => {
       act(() => result.current.setTheme("atelier"));
 
       act(() => {
-        if (mqlListener) mqlListener({ matches: true } as MediaQueryListEvent);
+        if (mqlListener) mqlListener({ matches: true });
       });
 
       expect(result.current.theme).toBe("atelier");
