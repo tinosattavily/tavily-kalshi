@@ -163,8 +163,8 @@ export function MarketCard(props: MarketSnapshotProps) {
   return (
     <div
       id="market-snapshot-card"
-      className="rounded-3xl bg-white/30 p-6 shadow-[0_18px_45px_rgba(30,58,138,0.25)] backdrop-blur-[12px] overflow-visible"
-      style={{ WebkitBackdropFilter: "blur(12px)" }}
+      className="rounded-lg bg-glass p-6 shadow-soft border border-ring backdrop-blur-glass overflow-visible relative"
+      style={{ WebkitBackdropFilter: "blur(var(--blur))" }}
     >
       {/* Header: title + chips */}
       <div className="mb-3 flex items-start justify-between gap-3 overflow-visible">
