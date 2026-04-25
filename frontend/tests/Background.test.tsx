@@ -1097,8 +1097,9 @@ describe("Dashboard Component", () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      // SignalCard displays "BUY YES" (uppercase) for buy_yes recommended_action
-      expect(screen.getByText(/buy yes/i)).toBeInTheDocument();
+      // The signal pill in TopBar and the SignalCard both display the action;
+      // assert the action text appears at least once.
+      expect(screen.getAllByText(/buy yes/i).length).toBeGreaterThanOrEqual(1);
     }, { timeout: 3000 });
   });
 

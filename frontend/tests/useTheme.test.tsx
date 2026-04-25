@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { useTheme } from "../hooks/useTheme";
-import { THEME_COOKIE } from "../lib/theme-cookie";
+import { THEME_COOKIE } from "../lib/theme";
 
 function setHtmlTheme(value: string | null) {
   if (value === null) delete document.documentElement.dataset.theme;

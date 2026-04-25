@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { THEME_COOKIE, type Theme } from "../lib/theme-cookie";
+import { THEME_COOKIE, type Theme } from "../lib/theme";
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const USER_OVERRIDE_FLAG = "prophily-theme-explicit";
