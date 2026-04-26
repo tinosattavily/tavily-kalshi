@@ -205,12 +205,6 @@ export function MarketCard(props: MarketSnapshotProps) {
   }));
 
   const countdownColor = getCountdownColor(props.endDate);
-  const countdownColorClass =
-    countdownColor === "var(--yes)"
-      ? "text-green-500"
-      : countdownColor === "var(--accent)"
-        ? "text-yellow-500"
-        : "text-red-500";
 
   return (
     <div
@@ -247,7 +241,7 @@ export function MarketCard(props: MarketSnapshotProps) {
             )}
             {props.endDate && !props.resolvedOutcome && (
               <span
-                className={`font-mono uppercase font-semibold ${countdownColorClass}`}
+                className="font-mono uppercase font-semibold"
                 style={{
                   fontSize: 9,
                   letterSpacing: 0.6,
@@ -268,7 +262,7 @@ export function MarketCard(props: MarketSnapshotProps) {
             )}
             {!props.endDate && !props.resolvedOutcome && (
               <span
-                className={`font-mono uppercase font-semibold ${countdownColorClass}`}
+                className="font-mono uppercase font-semibold"
                 style={{
                   fontSize: 9,
                   letterSpacing: 0.6,

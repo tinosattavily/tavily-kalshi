@@ -23,7 +23,7 @@ interface AppShellProps {
  *
  * Layout:
  * - Row 1: TopBar (60 px)
- * - Row 2: Sessions (260 px) | Main (1fr) | Config (320 px)
+ * - Row 2: Sessions (260 px) | Main (1fr) | Config (300 px)
  */
 export function AppShell({ urlInput, signal, sessions, main, config }: AppShellProps): React.JSX.Element {
   return (
@@ -38,9 +38,9 @@ export function AppShell({ urlInput, signal, sessions, main, config }: AppShellP
       <div
         className="grid gap-5"
         style={{
-          gridTemplateColumns: "260px minmax(0, 1fr) 320px",
+          gridTemplateColumns: "260px minmax(0, 1fr) 300px",
           padding: "20px 28px 28px",
-          minWidth: 1280,
+          minWidth: 1260,
         }}
       >
         {/* Left — sessions */}
