@@ -37,18 +37,21 @@ export default function TopBar({ urlInput, signal }: Props) {
         </span>
       </div>
 
-      {/* URL input centered */}
-      <div className="flex-1 flex justify-center">
+      {/* URL input centered in the viewport (mirrors the 232px logo column on the right) */}
+      <div className="flex-1 flex justify-center min-w-0">
         <div className="w-full" style={{ maxWidth: 560 }}>
           {urlInput}
         </div>
       </div>
 
-      {/* Signal pill (only when there's a signal) */}
-      <SignalPill signal={signal ?? null} size="sm" />
-
-      {/* Theme toggle */}
-      <ThemeToggle />
+      {/* Right cluster — fixed width matches the logo column so the URL input centers in the viewport */}
+      <div
+        className="flex items-center justify-end gap-3 flex-shrink-0"
+        style={{ width: 232 }}
+      >
+        <SignalPill signal={signal ?? null} size="sm" />
+        <ThemeToggle />
+      </div>
     </header>
   );
 }
