@@ -29,14 +29,14 @@ export function AppShell({ urlInput, signal, sessions, main, config }: AppShellP
   return (
     <section
       id="app-root"
-      className="relative min-h-screen overflow-x-auto z-10 text-ink"
+      className="relative h-screen overflow-x-auto overflow-y-hidden z-10 text-ink flex flex-col"
     >
       <GridBackground />
 
       <TopBar urlInput={urlInput} signal={signal} />
 
       <div
-        className="grid gap-5"
+        className="grid gap-5 flex-1 min-h-0"
         style={{
           gridTemplateColumns: "260px minmax(0, 1fr) 300px",
           padding: "20px 28px 28px",
@@ -44,15 +44,15 @@ export function AppShell({ urlInput, signal, sessions, main, config }: AppShellP
         }}
       >
         {/* Left — sessions */}
-        <aside className="rounded-lg bg-glass shadow-soft border border-ring backdrop-blur-glass overflow-hidden">
+        <aside className="rounded-lg bg-glass shadow-soft border border-ring backdrop-blur-glass overflow-hidden flex flex-col min-h-0">
           {sessions}
         </aside>
 
         {/* Center — main */}
-        <section className="min-w-0 flex flex-col gap-4">{main}</section>
+        <section className="min-w-0 min-h-0 flex flex-col gap-4 overflow-y-auto">{main}</section>
 
         {/* Right — config */}
-        <aside className="rounded-lg bg-glass shadow-soft border border-ring backdrop-blur-glass overflow-hidden flex flex-col">
+        <aside className="rounded-lg bg-glass shadow-soft border border-ring backdrop-blur-glass overflow-hidden flex flex-col min-h-0">
           {config}
         </aside>
       </div>
