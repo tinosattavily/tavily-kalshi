@@ -45,12 +45,14 @@ class KalshiAdapter(MarketVenueAdapter):
                 )
                 event = await get_event(event_id)
                 orderbook = await get_orderbook(ticker)
+                siblings = await get_markets(event_ticker=event_id)
                 return _build_market_result(
                     url=url,
                     market=market,
                     event=event,
                     event_id=event_id,
                     orderbook=orderbook,
+                    siblings=siblings,
                 )
 
         if url_type == "event" and event_ticker:
@@ -66,6 +68,7 @@ class KalshiAdapter(MarketVenueAdapter):
                         event=event,
                         event_id=event_ticker,
                         orderbook=orderbook,
+                        siblings=markets,
                     )
 
             if len(markets) == 1:
@@ -78,6 +81,7 @@ class KalshiAdapter(MarketVenueAdapter):
                     event=event,
                     event_id=event_ticker,
                     orderbook=orderbook,
+                    siblings=markets,
                 )
 
             event_image = _event_image(event)
@@ -202,6 +206,7 @@ def _build_market_result(
     event: dict[str, Any],
     event_id: str,
     orderbook: dict[str, Any],
+    siblings: list[dict[str, Any]] | None = None,
 ) -> NormalizedMarketResult:
     market_id = str(market.get("ticker"))
     order_book = normalize_kalshi_orderbook(orderbook)
@@ -213,6 +218,19 @@ def _build_market_result(
         "outcomes": ["Yes", "No"],
         "yes_index": 0,
     }
+
+    # Populate sibling markets so the frontend's MarketPickerChip can offer
+    # other outcomes under the same event. Filter out the currently-selected
+    # market so it doesn't appear as a "switch to" option.
+    event_image = _event_image(event)
+    market_options: list[dict[str, Any]] = []
+    if siblings:
+        for sibling in siblings:
+            sibling_ticker = str(sibling.get("ticker"))
+            if sibling_ticker == market_id:
+                continue
+            market_options.append(_normalize_option(sibling, event_image=event_image))
+
     return {
         "venue": "kalshi",
         "raw_url": url,
@@ -221,7 +239,7 @@ def _build_market_result(
         "event_id": event_id,
         "selected_market_id": market_id,
         "requires_market_selection": False,
-        "market_options": [],
+        "market_options": market_options,
         "market": market_dict,
         "event": _normalize_event(event),
         "market_snapshot": market_snapshot,

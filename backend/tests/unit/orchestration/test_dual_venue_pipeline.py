@@ -137,9 +137,16 @@ async def test_dual_venue_graph_runs_real_kalshi_adapter(monkeypatch):
         assert ticker == "AAA-25JAN-B1"
         return {"orderbook": {"yes": [[41, 10]], "no": [[57, 8]]}}
 
+    async def fake_get_markets(event_ticker=None, status="open", limit=100):
+        # The single-market path now also fetches sibling markets so the picker
+        # chip can render. Stub it to return an empty list to keep this test
+        # offline.
+        return []
+
     monkeypatch.setattr("app.domains.markets.adapters.kalshi.get_market", fake_get_market)
     monkeypatch.setattr("app.domains.markets.adapters.kalshi.get_event", fake_get_event)
     monkeypatch.setattr("app.domains.markets.adapters.kalshi.get_orderbook", fake_get_orderbook)
+    monkeypatch.setattr("app.domains.markets.adapters.kalshi.get_markets", fake_get_markets)
 
     request = AnalyzeRequest(
         market_url="https://kalshi.com/markets/AAA-25JAN-B1",
@@ -151,8 +158,11 @@ async def test_dual_venue_graph_runs_real_kalshi_adapter(monkeypatch):
     assert result["venue"] == "kalshi"
     assert result["market_id"] == "AAA-25JAN-B1"
     assert result["event_id"] == "AAA-25JAN"
-    assert result["market_snapshot"]["yes_price"] == 0.42
-    assert result["market_snapshot"]["order_book"]["asks"] == [{"price": 0.43, "size": 8}]
+    assert result["market_snapshot"]["yes_price"] == pytest.approx(0.42)
+    asks = result["market_snapshot"]["order_book"]["asks"]
+    assert len(asks) == 1
+    assert asks[0]["price"] == pytest.approx(0.43)
+    assert asks[0]["size"] == 8
 
 
 @pytest.mark.anyio(backend="asyncio")

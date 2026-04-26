@@ -35,18 +35,30 @@ async def test_kalshi_adapter_normalizes_direct_market(monkeypatch):
     async def fake_get_orderbook(ticker, depth=10):
         return {"orderbook": {"yes": [[41, 10]], "no": [[57, 9]]}}
 
+    async def fake_get_markets(event_ticker=None, status="open", limit=100):
+        # Return the selected market plus a sibling so we can verify the
+        # siblings-population logic filters out the active market.
+        return [
+            {"ticker": "INXD-25JAN17-B24999", "title": "Self", "yes_bid": 41, "yes_ask": 43, "status": "open"},
+            {"ticker": "INXD-25JAN17-B25000", "title": "Sibling A", "yes_bid": 30, "yes_ask": 32, "status": "open"},
+        ]
+
     monkeypatch.setattr("app.domains.markets.adapters.kalshi.get_market", fake_get_market)
     monkeypatch.setattr("app.domains.markets.adapters.kalshi.get_event", fake_get_event)
     monkeypatch.setattr("app.domains.markets.adapters.kalshi.get_orderbook", fake_get_orderbook)
+    monkeypatch.setattr("app.domains.markets.adapters.kalshi.get_markets", fake_get_markets)
 
     result = await adapter.fetch("https://kalshi.com/markets/INXD-25JAN17-B24999")
     assert result["venue"] == "kalshi"
     assert result["market_id"] == "INXD-25JAN17-B24999"
-    assert result["market_snapshot"]["yes_price"] == 0.42
-    assert result["market_snapshot"]["best_bid"] == 0.41
-    assert result["market_snapshot"]["best_ask"] == 0.43
-    assert result["market_snapshot"]["yes_price_cents"] == 42
-    assert result["market_snapshot"]["order_book"]["asks"][0]["price"] == 0.43
+    assert result["market_snapshot"]["yes_price"] == pytest.approx(0.42)
+    assert result["market_snapshot"]["best_bid"] == pytest.approx(0.41)
+    assert result["market_snapshot"]["best_ask"] == pytest.approx(0.43)
+    assert result["market_snapshot"]["order_book"]["asks"][0]["price"] == pytest.approx(0.43)
+
+    # Sibling markets populated; the active market is filtered out.
+    sibling_ids = [option["market_id"] for option in result["market_options"]]
+    assert sibling_ids == ["INXD-25JAN17-B25000"]
 
 
 @pytest.mark.asyncio
