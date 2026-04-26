@@ -25,6 +25,22 @@ function isStructured(r: Report): r is StructuredReportShape {
   return typeof r === "object" && r !== null && !Array.isArray(r);
 }
 
+/** Defensive normalizer: coerce any backend shape into string[]. */
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    // Split a paragraph/markdown blob into bullet-able lines.
+    const lines = value
+      .split(/\r?\n/)
+      .map((l) => l.replace(/^\s*[-*•]\s*/, "").trim())
+      .filter((l) => l.length > 0);
+    return lines.length > 0 ? lines : [value.trim()];
+  }
+  return [];
+}
+
 function CaseCard({
   title,
   items,
@@ -81,12 +97,12 @@ export default function ReportCard({ report, eventContext: _eventContext, signal
     );
   }
 
-  const headline = report.headline;
-  const thesis = report.thesis;
-  const bull = report.bull_case ?? [];
-  const bear = report.bear_case ?? [];
-  const risks = report.key_risks ?? [];
-  const exec = report.execution_notes ?? [];
+  const headline = typeof report.headline === "string" ? report.headline : undefined;
+  const thesis = typeof report.thesis === "string" ? report.thesis : undefined;
+  const bull = toStringArray(report.bull_case);
+  const bear = toStringArray(report.bear_case);
+  const risks = toStringArray(report.key_risks);
+  const exec = toStringArray(report.execution_notes);
 
   const marketP = signal?.market_prob ?? 0;
   const modelP = signal?.model_prob ?? 0;
