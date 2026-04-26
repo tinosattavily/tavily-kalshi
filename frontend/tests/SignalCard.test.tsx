@@ -21,7 +21,7 @@ describe("SignalCard Component", () => {
       model_prob: 0.6,
     };
     render(<SignalCard signal={signal} />);
-    expect(screen.getByText("Signal")).toBeInTheDocument();
+    expect(screen.getByText("SIGNAL")).toBeInTheDocument();
     expect(screen.getByText("50.00%")).toBeInTheDocument(); // Market Prob
     expect(screen.getByText("60.00%")).toBeInTheDocument(); // Model Prob
   });
@@ -41,12 +41,12 @@ describe("SignalCard Component", () => {
       rationale_short: "Strong bullish signal",
     };
     render(<SignalCard signal={signal} />);
-    expect(screen.getByText("Signal")).toBeInTheDocument();
+    expect(screen.getByText("SIGNAL")).toBeInTheDocument();
     expect(screen.getByText("BUY YES")).toBeInTheDocument();
     expect(screen.getByText("10.00%")).toBeInTheDocument(); // Edge
     expect(screen.getByText("20.00%")).toBeInTheDocument(); // Kelly Yes
     expect(screen.getByText("15.00%")).toBeInTheDocument(); // Position Size
-    expect(screen.getByText(/Confidence: HIGH/)).toBeInTheDocument();
+    expect(screen.getByText(/CONFIDENCE: HIGH/)).toBeInTheDocument();
     expect(screen.getByText(/Take Profit:/)).toBeInTheDocument();
     expect(screen.getByText(/Stop Loss:/)).toBeInTheDocument();
     expect(screen.getByText("Strong bullish signal")).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("SignalCard Component", () => {
     // "65.00%" appears multiple times (Market Prob and Model Prob), so use getAllByText
     const percentageElements = screen.getAllByText("65.00%");
     expect(percentageElements.length).toBeGreaterThan(0);
-    expect(screen.getByText(/Confidence: MEDIUM/)).toBeInTheDocument();
+    expect(screen.getByText(/CONFIDENCE: MEDIUM/)).toBeInTheDocument();
     expect(screen.getByText("Legacy rationale")).toBeInTheDocument();
   });
 
@@ -109,41 +109,42 @@ describe("SignalCard Component", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       <SignalCard signal={{ confidence_level: "high" } as any} />
     );
-    expect(screen.getByText(/Confidence: HIGH/)).toBeInTheDocument();
+    expect(screen.getByText(/CONFIDENCE: HIGH/)).toBeInTheDocument();
     unmount();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     render(<SignalCard signal={{ confidence_level: "MEDIUM" } as any} />);
-    expect(screen.getByText(/Confidence: MEDIUM/)).toBeInTheDocument();
+    expect(screen.getByText(/CONFIDENCE: MEDIUM/)).toBeInTheDocument();
     unmount();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     render(<SignalCard signal={{ confidence_level: "low" } as any} />);
-    expect(screen.getByText(/Confidence: LOW/)).toBeInTheDocument();
+    expect(screen.getByText(/CONFIDENCE: LOW/)).toBeInTheDocument();
   });
 
   test("defaults to LOW confidence when invalid", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     render(<SignalCard signal={{ confidence_level: "invalid" } as any} />);
-    expect(screen.getByText(/Confidence: LOW/)).toBeInTheDocument();
+    expect(screen.getByText(/CONFIDENCE: LOW/)).toBeInTheDocument();
   });
 
-  test("displays positive edge in green", () => {
+  test("displays positive edge with --yes color token", () => {
     const signal = {
       edge_pct: 0.1,
     };
     render(<SignalCard signal={signal} />);
     const edgeElement = screen.getByText("10.00%");
-    expect(edgeElement).toHaveClass("text-emerald-700");
+    // Style should reference --yes token via inline style
+    expect(edgeElement.getAttribute("style")).toContain("var(--yes)");
   });
 
-  test("displays negative edge in red", () => {
+  test("displays negative edge with --no color token", () => {
     const signal = {
       edge_pct: -0.1,
     };
     render(<SignalCard signal={signal} />);
     const edgeElement = screen.getByText("-10.00%");
-    expect(edgeElement).toHaveClass("text-rose-700");
+    expect(edgeElement.getAttribute("style")).toContain("var(--no)");
   });
 
   test("displays position size when recommended_size_fraction > 0", () => {
@@ -162,7 +163,7 @@ describe("SignalCard Component", () => {
     };
     render(<SignalCard signal={signal} />);
     // Position size section should not be rendered
-    expect(screen.queryByText(/Position Size/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/POSITION SIZE/)).not.toBeInTheDocument();
   });
 
   test("does not display position size when recommended_size_fraction is undefined", () => {
@@ -170,7 +171,7 @@ describe("SignalCard Component", () => {
       recommended_action: "buy_yes",
     };
     render(<SignalCard signal={signal} />);
-    expect(screen.queryByText(/Position Size/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/POSITION SIZE/)).not.toBeInTheDocument();
   });
 
   test("displays take profit and stop loss when available", () => {
@@ -179,17 +180,15 @@ describe("SignalCard Component", () => {
       target_stop_loss_prob: 0.3,
     };
     render(<SignalCard signal={signal} />);
-    // Text is split across spans and may appear in tooltips, so use getAllByText
-    const takeProfitElements = screen.getAllByText((content, element) => {
-      return element?.textContent?.includes("Take Profit:") && element?.textContent?.includes("80.00%") || false;
+    // Text is split across spans, look at composite
+    const takeProfitElements = screen.getAllByText((_content, element) => {
+      return (element?.textContent?.includes("Take Profit:") && element?.textContent?.includes("80.00%")) || false;
     });
     expect(takeProfitElements.length).toBeGreaterThan(0);
-    expect(takeProfitElements[0]).toBeInTheDocument();
-    const stopLossElements = screen.getAllByText((content, element) => {
-      return element?.textContent?.includes("Stop Loss:") && element?.textContent?.includes("30.00%") || false;
+    const stopLossElements = screen.getAllByText((_content, element) => {
+      return (element?.textContent?.includes("Stop Loss:") && element?.textContent?.includes("30.00%")) || false;
     });
     expect(stopLossElements.length).toBeGreaterThan(0);
-    expect(stopLossElements[0]).toBeInTheDocument();
   });
 
   test("displays only take profit when stop loss is missing", () => {
@@ -197,12 +196,10 @@ describe("SignalCard Component", () => {
       target_take_profit_prob: 0.8,
     };
     render(<SignalCard signal={signal} />);
-    // Text may appear in tooltips, so use getAllByText
-    const takeProfitElements = screen.getAllByText((content, element) => {
-      return element?.textContent?.includes("Take Profit:") && element?.textContent?.includes("80.00%") || false;
+    const takeProfitElements = screen.getAllByText((_content, element) => {
+      return (element?.textContent?.includes("Take Profit:") && element?.textContent?.includes("80.00%")) || false;
     });
     expect(takeProfitElements.length).toBeGreaterThan(0);
-    expect(takeProfitElements[0]).toBeInTheDocument();
     expect(screen.queryByText(/Stop Loss:/)).not.toBeInTheDocument();
   });
 
@@ -211,12 +208,10 @@ describe("SignalCard Component", () => {
       target_stop_loss_prob: 0.3,
     };
     render(<SignalCard signal={signal} />);
-    // Text appears multiple times (in component and tooltips), so use getAllByText
-    const stopLossElements = screen.getAllByText((content, element) => {
-      return element?.textContent?.includes("Stop Loss:") && element?.textContent?.includes("30.00%") || false;
+    const stopLossElements = screen.getAllByText((_content, element) => {
+      return (element?.textContent?.includes("Stop Loss:") && element?.textContent?.includes("30.00%")) || false;
     });
     expect(stopLossElements.length).toBeGreaterThan(0);
-    expect(stopLossElements[0]).toBeInTheDocument();
     expect(screen.queryByText(/Take Profit:/)).not.toBeInTheDocument();
   });
 
@@ -244,51 +239,48 @@ describe("SignalCard Component", () => {
     expect(screen.getByText("Legacy rationale")).toBeInTheDocument();
   });
 
-  test("applies correct color scheme for buy_yes", () => {
+  test("renders glass card surface for buy_yes (no per-action backgrounds)", () => {
     const signal = {
       recommended_action: "buy_yes",
     };
     const { container } = render(<SignalCard signal={signal} />);
     const section = container.querySelector("section");
-    expect(section).toHaveClass("bg-emerald-50/40");
-    expect(section).toHaveClass("border-emerald-100/50");
+    expect(section).toHaveClass("bg-glass");
+    expect(section).toHaveClass("border");
+    expect(section).toHaveClass("border-ring");
   });
 
-  test("applies correct color scheme for buy_no", () => {
+  test("renders glass card surface for buy_no", () => {
     const signal = {
       recommended_action: "buy_no",
     };
     const { container } = render(<SignalCard signal={signal} />);
     const section = container.querySelector("section");
-    expect(section).toHaveClass("bg-rose-50/40");
-    expect(section).toHaveClass("border-rose-100/50");
+    expect(section).toHaveClass("bg-glass");
   });
 
-  test("applies correct color scheme for reduce_yes", () => {
-    const signal = {
-      recommended_action: "reduce_yes",
-    };
-    const { container } = render(<SignalCard signal={signal} />);
-    const section = container.querySelector("section");
-    expect(section).toHaveClass("bg-rose-50/40");
+  test("action pill uses --no token for buy_no", () => {
+    render(<SignalCard signal={{ recommended_action: "buy_no" }} />);
+    const pill = screen.getByText("BUY NO").closest("span");
+    expect(pill?.getAttribute("style")).toContain("var(--no)");
   });
 
-  test("applies correct color scheme for reduce_no", () => {
-    const signal = {
-      recommended_action: "reduce_no",
-    };
-    const { container } = render(<SignalCard signal={signal} />);
-    const section = container.querySelector("section");
-    expect(section).toHaveClass("bg-amber-50/40");
+  test("action pill uses --yes token for buy_yes", () => {
+    render(<SignalCard signal={{ recommended_action: "buy_yes" }} />);
+    const pill = screen.getByText("BUY YES").closest("span");
+    expect(pill?.getAttribute("style")).toContain("var(--yes)");
   });
 
-  test("applies correct color scheme for hold", () => {
-    const signal = {
-      recommended_action: "hold",
-    };
-    const { container } = render(<SignalCard signal={signal} />);
-    const section = container.querySelector("section");
-    expect(section).toHaveClass("bg-slate-50/40");
+  test("action pill uses --accent token for reduce_no", () => {
+    render(<SignalCard signal={{ recommended_action: "reduce_no" }} />);
+    const pill = screen.getByText("REDUCE NO").closest("span");
+    expect(pill?.getAttribute("style")).toContain("var(--accent)");
+  });
+
+  test("action pill uses --ink-soft token for hold", () => {
+    render(<SignalCard signal={{ recommended_action: "hold" }} />);
+    const pill = screen.getByText("HOLD").closest("span");
+    expect(pill?.getAttribute("style")).toContain("var(--ink-soft)");
   });
 
   test("displays confidence score as percentage", () => {
@@ -306,7 +298,6 @@ describe("SignalCard Component", () => {
       confidence_level: "LOW",
     };
     render(<SignalCard signal={signal} />);
-    // "0%" appears multiple times, so use getAllByText
     const zeroPercentElements = screen.getAllByText(/0%/);
     expect(zeroPercentElements.length).toBeGreaterThan(0);
   });
@@ -317,11 +308,11 @@ describe("SignalCard Component", () => {
       model_prob: 0.987654,
     };
     render(<SignalCard signal={signal} />);
-    expect(screen.getByText("12.35%")).toBeInTheDocument(); // Rounded to 2 decimals
+    expect(screen.getByText("12.35%")).toBeInTheDocument();
     expect(screen.getByText("98.77%")).toBeInTheDocument();
   });
 
-  test("renders tooltips for metrics", () => {
+  test("renders all four metric labels", () => {
     const signal = {
       market_prob: 0.5,
       model_prob: 0.6,
@@ -329,19 +320,9 @@ describe("SignalCard Component", () => {
       kelly_fraction_yes: 0.2,
     };
     render(<SignalCard signal={signal} />);
-    // Tooltips are hidden by default, but should be in the DOM
-    const tooltips = screen.getAllByText(/Market Probability|Model Probability|Edge|Kelly Fraction/);
-    expect(tooltips.length).toBeGreaterThan(0);
-  });
-
-  test("handles expected_value_per_dollar in edge tooltip", () => {
-    const signal = {
-      edge_pct: 0.1,
-      expected_value_per_dollar: 0.15,
-    };
-    render(<SignalCard signal={signal} />);
-    // The tooltip should contain expected value information
-    // This is tested indirectly through rendering
-    expect(screen.getByText("10.00%")).toBeInTheDocument();
+    expect(screen.getByText("MARKET PROB")).toBeInTheDocument();
+    expect(screen.getByText("MODEL PROB")).toBeInTheDocument();
+    expect(screen.getByText("EDGE")).toBeInTheDocument();
+    expect(screen.getByText("KELLY YES")).toBeInTheDocument();
   });
 });

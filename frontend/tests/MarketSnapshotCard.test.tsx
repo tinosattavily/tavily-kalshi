@@ -152,7 +152,7 @@ describe("MarketCard", () => {
     expect(onMarketSelect).toHaveBeenCalledWith("market-2");
   });
 
-  test("displays red countdown color when less than 1 day", () => {
+  test("displays --no token countdown color when less than 1 day", () => {
     const endDate = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(); // 12 hours from now
     render(
       <MarketCard
@@ -160,12 +160,12 @@ describe("MarketCard", () => {
         endDate={endDate}
       />
     );
-    
+
     const timer = screen.getByText(/closes in/i);
-    expect(timer).toHaveClass("text-red-500");
+    expect(timer.getAttribute("style")).toContain("var(--no)");
   });
 
-  test("displays yellow countdown color when less than 7 days but more than 1 day", () => {
+  test("displays --accent token countdown color when less than 7 days but more than 1 day", () => {
     const endDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(); // 3 days from now
     render(
       <MarketCard
@@ -173,12 +173,12 @@ describe("MarketCard", () => {
         endDate={endDate}
       />
     );
-    
+
     const timer = screen.getByText(/closes in/i);
-    expect(timer).toHaveClass("text-yellow-500");
+    expect(timer.getAttribute("style")).toContain("var(--accent)");
   });
 
-  test("displays green countdown color when more than 7 days", () => {
+  test("displays --yes token countdown color when more than 7 days", () => {
     const endDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(); // 10 days from now
     render(
       <MarketCard
@@ -186,9 +186,9 @@ describe("MarketCard", () => {
         endDate={endDate}
       />
     );
-    
+
     const timer = screen.getByText(/closes in/i);
-    expect(timer).toHaveClass("text-green-500");
+    expect(timer.getAttribute("style")).toContain("var(--yes)");
   });
 
   test("handles invalid date in countdown color", () => {
@@ -198,9 +198,9 @@ describe("MarketCard", () => {
         endDate="invalid-date"
       />
     );
-    
+
     const timer = screen.getByText(/closes in/i);
-    expect(timer).toHaveClass("text-red-500");
+    expect(timer.getAttribute("style")).toContain("var(--no)");
   });
 
   test("toggles market picker dropdown via click", () => {
