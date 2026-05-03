@@ -1,3 +1,13 @@
+"""Standalone MongoDB migration script (CLI ops tool, not part of the FastAPI request path).
+
+Run manually via `python -m app.migrations.dual_venue_indexes [--dry-run]` to
+backfill legacy Polymarket-only rows and rebuild venue-aware unique indexes.
+
+Reached only by tests and direct CLI invocation; intentionally NOT imported by
+app/main.py or any runtime route. Static reachability analysis from main.py
+will (correctly) flag this module as unreachable — that's by design.
+"""
+
 from __future__ import annotations
 
 import argparse
