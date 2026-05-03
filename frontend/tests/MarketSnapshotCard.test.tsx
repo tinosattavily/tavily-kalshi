@@ -1,12 +1,12 @@
 /** @jest-environment jsdom */
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MarketSnapshotCard } from "../components/MarketSnapshotCard";
+import { MarketCard } from "../components/analysis/MarketCard";
 
-describe("MarketSnapshotCard", () => {
+describe("MarketCard", () => {
   const defaultProps = {
     eventTitle: "Test Event",
-    polymarketUrl: "https://polymarket.com/market/test",
+    marketUrl: "https://kalshi.com/markets/test",
     closesIn: "23 days",
     yesPrice: 0.5,
     noPrice: 0.5,
@@ -14,7 +14,7 @@ describe("MarketSnapshotCard", () => {
   };
 
   test("renders with full data", () => {
-    render(<MarketSnapshotCard {...defaultProps} />);
+    render(<MarketCard {...defaultProps} />);
     
     expect(screen.getByText("Test Event")).toBeInTheDocument();
     // "0.500" appears multiple times (YES and NO tiles), so use getAllByText
@@ -30,7 +30,7 @@ describe("MarketSnapshotCard", () => {
 
   test("handles missing data", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         question={undefined}
         commentCount={undefined}
@@ -40,9 +40,25 @@ describe("MarketSnapshotCard", () => {
     expect(screen.getByText("Test Event")).toBeInTheDocument();
   });
 
+  test("renders without comment counts", () => {
+    render(
+      <MarketCard
+        {...defaultProps}
+        venue="kalshi"
+        question="A?"
+        commentCount={null}
+        eventCommentCount={null}
+        seriesCommentCount={null}
+      />
+    );
+
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Kalshi").length).toBeGreaterThan(0);
+  });
+
   test("formats prices correctly", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         yesPrice={0.1234}
         noPrice={0.8766}
@@ -56,7 +72,7 @@ describe("MarketSnapshotCard", () => {
   test("formats dates correctly", () => {
     const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate={endDate}
       />
@@ -66,16 +82,16 @@ describe("MarketSnapshotCard", () => {
   });
 
   test("handles URL correctly", () => {
-    render(<MarketSnapshotCard {...defaultProps} />);
-    
-    const link = screen.getByRole("link", { name: /polymarket/i });
-    expect(link).toHaveAttribute("href", "https://polymarket.com/market/test");
+    render(<MarketCard {...defaultProps} />);
+
+    const link = screen.getByRole("link", { name: /kalshi/i });
+    expect(link).toHaveAttribute("href", "https://kalshi.com/markets/test");
     expect(link).toHaveAttribute("target", "_blank");
   });
 
   test("displays all prop variations", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         question="Will this test pass?"
         groupItemTitle="Test Market"
@@ -95,7 +111,7 @@ describe("MarketSnapshotCard", () => {
 
   test("handles order book data", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         bids={[{ price: 0.48, size: 100 }, { price: 0.47, size: 200 }]}
         asks={[{ price: 0.52, size: 150 }, { price: 0.53, size: 250 }]}
@@ -111,120 +127,117 @@ describe("MarketSnapshotCard", () => {
   test("handles market selection", () => {
     const onMarketSelect = jest.fn();
     const previousMarkets = [
-      { slug: "market-1", question: "Market 1?" },
-      { slug: "market-2", question: "Market 2?" },
+      { market_id: "market-1", slug: "market-1", question: "Market 1?" },
+      { market_id: "market-2", slug: "market-2", question: "Market 2?" },
     ];
-    
+
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         question="Test?"
         previousMarkets={previousMarkets}
         onMarketSelect={onMarketSelect}
-        activeMarketSlug="market-1"
+        activeMarketId="market-1"
       />
     );
-    
-    // Hover to show dropdown
-    const marketLabel = screen.getByText(/MARKET:/i);
-    fireEvent.mouseEnter(marketLabel);
-    
-    // Click on a market
+
+    // Click the picker chip to open the dropdown
+    const marketLabel = screen.getByText("MARKET");
+    fireEvent.click(marketLabel);
+
+    // Click on a sibling market
     const marketButton = screen.getByText("Market 2?");
     fireEvent.click(marketButton);
-    
+
     expect(onMarketSelect).toHaveBeenCalledWith("market-2");
   });
 
-  test("displays red countdown color when less than 1 day", () => {
+  test("displays --no token countdown color when less than 1 day", () => {
     const endDate = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(); // 12 hours from now
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate={endDate}
       />
     );
-    
+
     const timer = screen.getByText(/closes in/i);
-    expect(timer).toHaveClass("text-red-500");
+    expect(timer.getAttribute("style")).toContain("var(--no)");
   });
 
-  test("displays yellow countdown color when less than 7 days but more than 1 day", () => {
+  test("displays --accent token countdown color when less than 7 days but more than 1 day", () => {
     const endDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(); // 3 days from now
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate={endDate}
       />
     );
-    
+
     const timer = screen.getByText(/closes in/i);
-    expect(timer).toHaveClass("text-yellow-500");
+    expect(timer.getAttribute("style")).toContain("var(--accent)");
   });
 
-  test("displays green countdown color when more than 7 days", () => {
+  test("displays --yes token countdown color when more than 7 days", () => {
     const endDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(); // 10 days from now
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate={endDate}
       />
     );
-    
+
     const timer = screen.getByText(/closes in/i);
-    expect(timer).toHaveClass("text-green-500");
+    expect(timer.getAttribute("style")).toContain("var(--yes)");
   });
 
   test("handles invalid date in countdown color", () => {
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         endDate="invalid-date"
       />
     );
-    
+
     const timer = screen.getByText(/closes in/i);
-    expect(timer).toHaveClass("text-red-500");
+    expect(timer.getAttribute("style")).toContain("var(--no)");
   });
 
-  test("handles market dropdown hover and mouse leave", () => {
+  test("toggles market picker dropdown via click", () => {
     const onMarketSelect = jest.fn();
     const previousMarkets = [
-      { slug: "market-1", question: "Market 1?" },
-      { slug: "market-2", question: "Market 2?" },
+      { market_id: "market-1", slug: "market-1", question: "Market 1?" },
+      { market_id: "market-2", slug: "market-2", question: "Market 2?" },
     ];
-    
+
     render(
-      <MarketSnapshotCard
+      <MarketCard
         {...defaultProps}
         question="Test?"
         previousMarkets={previousMarkets}
         onMarketSelect={onMarketSelect}
+        activeMarketId="market-1"
       />
     );
-    
-    // Find the market label container
-    const marketLabelContainer = screen.getByText(/MARKET:/i).closest("div");
-    expect(marketLabelContainer).toBeInTheDocument();
-    
-    // Hover to show dropdown
-    if (marketLabelContainer) {
-      fireEvent.mouseEnter(marketLabelContainer);
-      // Dropdown should be visible
-      expect(screen.getByText("Market 1?")).toBeInTheDocument();
-      
-      // Mouse leave to hide dropdown
-      fireEvent.mouseLeave(marketLabelContainer);
-      // Note: The dropdown might still be in DOM but hidden, so we test the interaction
-    }
+
+    // The picker chip exposes a "MARKET" label as a button
+    const marketLabel = screen.getByText("MARKET");
+    expect(marketLabel).toBeInTheDocument();
+
+    // Click to open the dropdown
+    fireEvent.click(marketLabel);
+    expect(screen.getByText("Market 2?")).toBeInTheDocument();
+
+    // Click again to close
+    fireEvent.click(marketLabel);
   });
 
-  test("handles Polymarket favicon image error", () => {
-    render(<MarketSnapshotCard {...defaultProps} />);
-    
+  test("handles Kalshi favicon image error", () => {
+    render(<MarketCard {...defaultProps} />);
+
     const images = screen.getAllByRole("img");
-    const favicon = images.find(img => (img as HTMLImageElement).alt === "Polymarket");
-    
+    const favicon = images.find(img => (img as HTMLImageElement).alt === "Kalshi");
+
     if (favicon) {
       fireEvent.error(favicon);
       expect(favicon).toHaveStyle({ display: "none" });

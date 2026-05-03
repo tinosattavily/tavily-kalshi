@@ -1,6 +1,7 @@
 /** @jest-environment node */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { GET } from "../../../../app/api/run/[run_id]/route";
+import { logger } from "../../../../lib/logger";
 
 // Mock Next.js server
 jest.mock("next/server", () => ({
@@ -14,6 +15,15 @@ jest.mock("next/server", () => ({
   },
 }));
 
+jest.mock("../../../../lib/logger", () => ({
+  logger: {
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
 // Mock fetch
 global.fetch = jest.fn();
 
@@ -24,7 +34,6 @@ describe("GET /api/run/[run_id]", () => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
     delete process.env.BACKEND_URL;
-    // Set development mode to get localhost URL
     Object.defineProperty(process.env, "NODE_ENV", {
       value: "development",
       writable: true,
@@ -37,6 +46,14 @@ describe("GET /api/run/[run_id]", () => {
   });
 
   test("fetches run from backend successfully with sync params", async () => {
+    const originalEnv = process.env.NODE_ENV;
+    // Use Object.defineProperty to bypass TypeScript read-only check in tests
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: 'development',
+      writable: true,
+      configurable: true,
+    });
+    
     const mockRequest = {} as any;
     const params = { run_id: "test-run-id" };
 
@@ -49,7 +66,6 @@ describe("GET /api/run/[run_id]", () => {
 
     const response = await GET(mockRequest, { params });
 
-    // Route uses proxyBackendRequest which includes AbortSignal
     expect(global.fetch).toHaveBeenCalledWith(
       "http://localhost:8000/api/run/test-run-id",
       expect.objectContaining({
@@ -57,12 +73,18 @@ describe("GET /api/run/[run_id]", () => {
         headers: {
           "Content-Type": "application/json",
         },
-        signal: expect.any(AbortSignal),
+        signal: expect.any(Object),
       })
     );
 
     const responseData = await response.json();
     expect(responseData).toEqual({ run_id: "test-run-id", status: "completed" });
+    // Restore original NODE_ENV
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: originalEnv,
+      writable: true,
+      configurable: true,
+    });
   });
 
   test("fetches run from backend successfully with async params", async () => {
@@ -76,15 +98,21 @@ describe("GET /api/run/[run_id]", () => {
 
     (global.fetch as jest.Mock).mockResolvedValue(mockResponse);
 
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
+
     const response = await GET(mockRequest, { params });
 
     expect(global.fetch).toHaveBeenCalledWith(
       "http://localhost:8000/api/run/test-run-id",
-      expect.any(Object)
+      expect.objectContaining({
+        signal: expect.any(Object),
+      })
     );
 
     const responseData = await response.json();
     expect(responseData).toEqual({ run_id: "test-run-id", status: "completed" });
+
+    consoleLogSpy.mockRestore();
   });
 
   test("uses BACKEND_URL from environment", async () => {
@@ -118,6 +146,12 @@ describe("GET /api/run/[run_id]", () => {
     const responseData = await response.json();
     expect(responseData.error).toBe("Invalid run_id parameter");
     expect(responseData.received).toBe("");
+    expect(logger.error).toHaveBeenCalledWith(
+      "[Next.js API] Invalid run_id in route params:",
+      "",
+      "type:",
+      "string"
+    );
   });
 
   test("validates run_id and returns 400 for 'undefined' string", async () => {
@@ -130,6 +164,7 @@ describe("GET /api/run/[run_id]", () => {
     const responseData = await response.json();
     expect(responseData.error).toBe("Invalid run_id parameter");
     expect(responseData.received).toBe("undefined");
+
   });
 
   test("validates run_id and returns 400 for 'null' string", async () => {
@@ -142,6 +177,7 @@ describe("GET /api/run/[run_id]", () => {
     const responseData = await response.json();
     expect(responseData.error).toBe("Invalid run_id parameter");
     expect(responseData.received).toBe("null");
+
   });
 
   test("encodes run_id in URL", async () => {
@@ -159,7 +195,9 @@ describe("GET /api/run/[run_id]", () => {
 
     expect(global.fetch).toHaveBeenCalledWith(
       "http://localhost:8000/api/run/test%2Frun%3Fid%3D123",
-      expect.any(Object)
+      expect.objectContaining({
+        signal: expect.any(Object),
+      })
     );
   });
 
@@ -271,6 +309,10 @@ describe("GET /api/run/[run_id]", () => {
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
     expect(responseData.detail).toBe("Network error");
+    expect(logger.error).toHaveBeenCalledWith(
+      "Error proxying to backend:",
+      expect.any(Error)
+    );
   });
 
   test("handles non-Error exception", async () => {
@@ -308,3 +350,4 @@ describe("GET /api/run/[run_id]", () => {
     expect(responseData.detail).toBe("Backend error: 404");
   });
 });
+

@@ -2,46 +2,33 @@
 
 import React from "react";
 
-export function SignalSkeleton(): React.JSX.Element {
+export function SignalSkeleton() {
   return (
-    <section className="mb-6 rounded-3xl p-8 backdrop-blur-xl flex flex-col gap-4 bg-slate-50/40 border border-slate-100/50 animate-pulse">
+    <section className="rounded-lg p-5 bg-glass border border-ring shadow-soft backdrop-blur-glass mb-3.5 flex flex-col gap-4 animate-pulse">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="h-6 w-32 rounded-full bg-slate-200 mb-2" />
-          <div className="h-4 w-48 rounded-full bg-slate-200" />
+          <div className="h-3 w-20 rounded bg-neu-track mb-2" />
+          <div className="h-3 w-48 rounded bg-neu-track" />
         </div>
-        <div className="h-8 w-24 rounded-full bg-slate-200" />
+        <div className="h-6 w-24 rounded-full bg-neu-track" />
       </div>
 
       {/* Metrics grid */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="group relative">
-            <div className="h-4 w-24 rounded-full bg-slate-200 mb-2" />
-            <div className="h-8 w-20 rounded-full bg-slate-200 mb-1" />
-            <div className="h-3 w-32 rounded-full bg-slate-200" />
+          <div key={i} className="flex flex-col gap-1.5">
+            <div className="h-3 w-20 rounded bg-neu-track" />
+            <div className="h-5 w-16 rounded bg-neu-track" />
+            <div className="h-3 w-28 rounded bg-neu-track" />
           </div>
         ))}
       </div>
 
-      {/* Position size skeleton */}
-      <div className="p-3 rounded-xl border bg-slate-100/60">
-        <div className="h-4 w-28 rounded-full bg-slate-200 mb-2" />
-        <div className="h-8 w-24 rounded-full bg-slate-200 mb-1" />
-        <div className="h-3 w-40 rounded-full bg-slate-200" />
-      </div>
-
       {/* Confidence row */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-t pt-3">
-        <div className="h-8 w-40 rounded-full bg-slate-200" />
-        <div className="h-4 w-48 rounded-full bg-slate-200" />
-      </div>
-
-      {/* Rationale skeleton */}
-      <div className="mt-3">
-        <div className="h-4 w-full rounded-full bg-slate-200 mb-2" />
-        <div className="h-4 w-5/6 rounded-full bg-slate-200" />
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-t border-line pt-3">
+        <div className="h-6 w-40 rounded-full bg-neu-track" />
+        <div className="h-3 w-48 rounded bg-neu-track" />
       </div>
     </section>
   );

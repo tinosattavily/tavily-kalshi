@@ -1,5 +1,5 @@
 # =============================================================================
-# .gitignore - Comprehensive ignore rules for Tavily Polymarket Signals
+# .gitignore - Comprehensive ignore rules for Tavily Kalshi
 # =============================================================================
 # This file ensures build artifacts, dependencies, cache files, and sensitive
 # data are not committed to version control.
@@ -315,4 +315,17 @@ local_settings.py
 # -----------------------------------------------------------------------------
 # End of .gitignore
 # -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Local docs and plans (not tracked)
+# -----------------------------------------------------------------------------
+docs/kalshi-tavily-overview.md
 docs/plans/
+docs/superpowers/
+
+# -----------------------------------------------------------------------------
+# Editor/tool configs
+# -----------------------------------------------------------------------------
+.agents/
+.claude/
+.cursor/

@@ -24,6 +24,11 @@ describe("POST /api/analyze", () => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
     delete process.env.BACKEND_URL;
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "development",
+      writable: true,
+      configurable: true,
+    });
   });
 
   afterEach(() => {
@@ -31,15 +36,8 @@ describe("POST /api/analyze", () => {
   });
 
   test("proxies request to backend successfully", async () => {
-    const originalNodeEnv = process.env.NODE_ENV;
-    Object.defineProperty(process.env, "NODE_ENV", {
-      value: "development",
-      writable: true,
-      configurable: true,
-    });
-
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -51,35 +49,27 @@ describe("POST /api/analyze", () => {
 
     const response = await POST(mockRequest as any);
 
-    // The route now calls /api/analyze/start and includes signal
     expect(global.fetch).toHaveBeenCalledWith(
       "http://localhost:8000/api/analyze/start",
-      expect.objectContaining({
+      {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url: "https://polymarket.com/event/123" }),
-        signal: expect.any(AbortSignal),
-      })
+        body: JSON.stringify({ url: "https://kalshi.com/events/test-event" }),
+      }
     );
 
     expect(mockRequest.json).toHaveBeenCalled();
     const responseData = await response.json();
     expect(responseData).toEqual({ run_id: "test-run-id" });
-
-    Object.defineProperty(process.env, "NODE_ENV", {
-      value: originalNodeEnv,
-      writable: true,
-      configurable: true,
-    });
   });
 
   test("uses BACKEND_URL from environment", async () => {
     process.env.BACKEND_URL = "https://api.example.com";
 
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -99,7 +89,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with JSON response", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -121,7 +111,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with text response", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -143,7 +133,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with empty text response", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -165,7 +155,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with error field", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -184,7 +174,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with message field", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -203,7 +193,7 @@ describe("POST /api/analyze", () => {
 
   test("handles backend error with unknown error shape", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     const mockResponse = {
@@ -222,7 +212,7 @@ describe("POST /api/analyze", () => {
 
   test("handles fetch error", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     (global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
@@ -237,7 +227,7 @@ describe("POST /api/analyze", () => {
 
   test("handles non-Error exception", async () => {
     const mockRequest = {
-      json: jest.fn().mockResolvedValue({ url: "https://polymarket.com/event/123" }),
+      json: jest.fn().mockResolvedValue({ url: "https://kalshi.com/events/test-event" }),
     };
 
     (global.fetch as jest.Mock).mockRejectedValue("String error");
@@ -255,16 +245,20 @@ describe("POST /api/analyze", () => {
       json: jest.fn().mockRejectedValue(new Error("Invalid JSON")),
     };
 
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+
     const response = await POST(mockRequest as any);
 
     expect(response.status).toBe(500);
     const responseData = await response.json();
     expect(responseData.error).toBe("Failed to connect to backend");
+
+    consoleErrorSpy.mockRestore();
   });
 
   test("forwards request body correctly", async () => {
     const requestBody = {
-      url: "https://polymarket.com/event/123",
+      url: "https://kalshi.com/events/test-event",
       options: { include_news: true },
     };
 
@@ -289,3 +283,4 @@ describe("POST /api/analyze", () => {
     );
   });
 });
+

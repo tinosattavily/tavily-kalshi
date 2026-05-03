@@ -1,17 +1,47 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: [
-    "./app/**/*.{js,ts,jsx,tsx}",
-    "./components/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      colors: {
+        ink: "var(--ink)",
+        "ink-soft": "var(--ink-soft)",
+        "ink-mute": "var(--ink-mute)",
+        line: "var(--line)",
+        glass: "var(--glass)",
+        "glass-strong": "var(--glass-strong)",
+        "topbar-bg": "var(--topbar-bg)",
+        "input-bg": "var(--input-bg)",
+        "logo-bg": "var(--logo-bg)",
+        ring: "var(--ring)",
+        accent: "var(--accent)",
+        "accent-soft": "var(--accent-soft)",
+        "accent-on": "var(--accent-on)",
+        yes: "var(--yes)",
+        "yes-soft": "var(--yes-soft)",
+        "yes-ink": "var(--yes-ink)",
+        no: "var(--no)",
+        "no-soft": "var(--no-soft)",
+        "no-ink": "var(--no-ink)",
+        "neu-track": "var(--neu-track)",
+        "neu-thumb": "var(--neu-thumb)",
+      },
       boxShadow: {
-        'neumorph': '8px 8px 16px #d1d5db, -8px -8px 16px #ffffff',
-        'neumorph-sm': '4px 4px 8px #d1d5db, -4px -4px 8px #ffffff',
-        'neumorph-lg': '12px 12px 24px #d1d5db, -12px -12px 24px #ffffff',
-        'neumorph-inset': 'inset 4px 4px 8px #d1d5db, inset -4px -4px 8px #ffffff',
+        "neu-raised": "var(--neu-raised)",
+        "neu-inset": "var(--neu-inset)",
+        soft: "var(--shadow)",
+      },
+      borderRadius: {
+        DEFAULT: "var(--radius-sm)",
+        lg: "var(--radius)",
+      },
+      fontFamily: {
+        sans: ["var(--font-sans)"],
+        mono: ["var(--font-mono)"],
+      },
+      backdropBlur: {
+        glass: "var(--blur)",
       },
     },
   },
@@ -19,3 +49,5 @@ const config: Config = {
 };
 
 export default config;
+
+

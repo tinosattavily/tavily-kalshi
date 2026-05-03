@@ -1,8 +1,12 @@
 "use client";
 
-import AppShell from "./layout/AppShell";
+import React, { PropsWithChildren } from "react";
 
-export default function Layout(): React.JSX.Element {
-  return <AppShell />;
+import Dashboard from "./Dashboard";
+
+
+export default function Layout({ children }: PropsWithChildren) {
+  // Render the main dashboard.
+  return <Dashboard>{children}</Dashboard>;
 }
 

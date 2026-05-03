@@ -1,10 +1,9 @@
 /** @jest-environment jsdom */
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { NewsCard } from "../components/NewsCard";
+import { NewsCard } from "../components/analysis/NewsCard";
 
-describe("NewsCard", () => {
+describe("NewsCard (legacy shim wrapping NewsTab + SummaryTab)", () => {
   const mockArticles = [
     {
       title: "Article 1",
@@ -29,109 +28,71 @@ describe("NewsCard", () => {
 
   test("renders article list", () => {
     render(<NewsCard highlights={mockArticles} />);
-    
+
     expect(screen.getByText("Article 1")).toBeInTheDocument();
     expect(screen.getByText("Article 2")).toBeInTheDocument();
     expect(screen.getByText("Article 3")).toBeInTheDocument();
   });
 
-  test("displays summary", () => {
-    render(
-      <NewsCard
-        highlights={mockArticles}
-        newsSummary="Test summary"
-      />
-    );
-    
-    // Switch to summary tab
-    const summaryTab = screen.getByText("Summary");
-    fireEvent.click(summaryTab);
-    
+  test("displays summary text alongside news (no internal tab strip)", () => {
+    render(<NewsCard highlights={mockArticles} newsSummary="Test summary" />);
+
+    // The shim renders NewsTab + SummaryTab in sequence — no tab switch needed.
     expect(screen.getByText("Test summary")).toBeInTheDocument();
+    expect(screen.getByText("Article 1")).toBeInTheDocument();
   });
 
   test("handles empty states", () => {
     render(<NewsCard highlights={[]} />);
-    
-    expect(screen.getByText(/0 stories/i)).toBeInTheDocument();
+
+    expect(screen.getByText(/no articles in this run/i)).toBeInTheDocument();
+    expect(screen.getByText(/no summary available/i)).toBeInTheDocument();
   });
 
-  test("displays sentiment", () => {
+  test("displays sentiment chips for each article", () => {
     render(<NewsCard highlights={mockArticles} />);
-    
+
+    // Sentiment chips render the kind as text — but "bullish"/"bearish"/"neutral"
+    // also appear in the SummaryTab breakdown rows ("Bullish"/"Bearish"/"Neutral").
+    // We assert the chip variant (lowercase) appears at least once for each kind.
     expect(screen.getByText("bullish")).toBeInTheDocument();
     expect(screen.getByText("bearish")).toBeInTheDocument();
     expect(screen.getByText("neutral")).toBeInTheDocument();
   });
 
-  test("handles article link clicks", () => {
+  test("handles article click", () => {
     const onItemClick = jest.fn();
-    render(
-      <NewsCard
-        highlights={mockArticles}
-        onItemClick={onItemClick}
-      />
-    );
-    
+    render(<NewsCard highlights={mockArticles} onItemClick={onItemClick} />);
+
     const article = screen.getByText("Article 1");
     fireEvent.click(article);
-    
+
     expect(onItemClick).toHaveBeenCalledWith(mockArticles[0]);
   });
 
-  test("displays query information", () => {
-    render(
-      <NewsCard
-        highlights={mockArticles}
-        newsSummary="Summary with query info"
-      />
-    );
-    
-    const summaryTab = screen.getByText("Summary");
-    fireEvent.click(summaryTab);
-    
+  test("displays summary with provided text", () => {
+    render(<NewsCard highlights={mockArticles} newsSummary="Summary with query info" />);
+
     expect(screen.getByText(/summary with query info/i)).toBeInTheDocument();
   });
 
-  test("switches between news and summary tabs", async () => {
-    const user = userEvent.setup();
-    render(
-      <NewsCard
-        highlights={mockArticles}
-        newsSummary="Test summary"
-      />
-    );
-    
-    // Start on news tab
+  test("renders both news and summary content simultaneously", () => {
+    render(<NewsCard highlights={mockArticles} newsSummary="Test summary" />);
+
+    // News content
     expect(screen.getByText("Article 1")).toBeInTheDocument();
-    
-    // Switch to summary
-    const summaryTab = screen.getByText("Summary");
-    await user.click(summaryTab);
-    
+    // Summary content
     expect(screen.getByText("Test summary")).toBeInTheDocument();
-    expect(screen.queryByText("Article 1")).not.toBeInTheDocument();
-    
-    // Switch back to news
-    const newsTab = screen.getByText("News");
-    await user.click(newsTab);
-    
-    expect(screen.getByText("Article 1")).toBeInTheDocument();
   });
 
-  test("shows loading state", () => {
-    render(
-      <NewsCard
-        highlights={[]}
-        isLoading={true}
-      />
-    );
-    
-    expect(screen.getByText(/updating/i)).toBeInTheDocument();
+  test("shows loading placeholder when loading and no articles", () => {
+    const { container } = render(<NewsCard highlights={[]} isLoading={true} />);
+
+    // The loading branch in NewsTab renders a pulsing skeleton block.
+    expect(container.querySelector(".animate-pulse")).not.toBeNull();
   });
 
-  test("handles article link click with stopPropagation", async () => {
-    const _user = userEvent.setup();
+  test("source link click still fires onItemClick", () => {
     const onItemClick = jest.fn();
     const articleWithUrl = {
       title: "Article with URL",
@@ -139,25 +100,18 @@ describe("NewsCard", () => {
       url: "https://example.com/article",
       sentiment: "bullish" as const,
     };
-    
-    render(
-      <NewsCard
-        highlights={[articleWithUrl]}
-        onItemClick={onItemClick}
-      />
-    );
-    
-    // Find the link element (when both url and source exist, it renders as a link)
+
+    render(<NewsCard highlights={[articleWithUrl]} onItemClick={onItemClick} />);
+
     const link = screen.getByRole("link", { name: /Test Source/i });
-    
-    // Simulate click on the link (fireEvent creates the event for us)
     fireEvent.click(link);
-    
-    // Verify onItemClick was called
+
     expect(onItemClick).toHaveBeenCalledWith(articleWithUrl);
-    
-    // Note: stopPropagation is called in the onClick handler, but we can't easily test it
-    // without accessing the internal event. The important part is that onItemClick is called.
+  });
+
+  test("falls back to combinedSummary when newsSummary is absent", () => {
+    render(<NewsCard highlights={mockArticles} combinedSummary="Combined summary text" />);
+
+    expect(screen.getByText("Combined summary text")).toBeInTheDocument();
   });
 });
-
