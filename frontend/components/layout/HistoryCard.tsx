@@ -42,10 +42,13 @@ export default function RecentMarketCard({
   onClick,
   isActive = false,
 }: RecentMarketCardProps): React.JSX.Element {
-  const question =
-    run.market_snapshot?.question ||
-    run.event_context?.title ||
-    "Unknown Market";
+  const eventTitle = run.event_context?.title?.trim();
+  const marketQuestion = run.market_snapshot?.question?.trim();
+  const showEventLine =
+    !!eventTitle &&
+    !!marketQuestion &&
+    eventTitle.toLowerCase() !== marketQuestion.toLowerCase();
+  const primary = marketQuestion || eventTitle || "Unknown Market";
 
   const yesPrice = run.market_snapshot?.yes_price ?? 0;
   const yesPct = Math.round(yesPrice * 100);
@@ -134,6 +137,19 @@ export default function RecentMarketCard({
       }
       style={{ borderColor: isActive ? "var(--accent-soft)" : undefined }}
     >
+      {showEventLine && (
+        <div
+          className="text-[10.5px] text-ink-mute leading-snug mb-1"
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {eventTitle}
+        </div>
+      )}
       <div
         className="text-[12.5px] font-medium text-ink leading-snug"
         style={{
@@ -143,7 +159,7 @@ export default function RecentMarketCard({
           overflow: "hidden",
         }}
       >
-        {question || "Untitled run"}
+        {primary || "Untitled run"}
       </div>
       <div className="flex items-center gap-2 mt-2 font-mono text-[10px]">
         <span className="text-yes-ink">{yesPct}%</span>
