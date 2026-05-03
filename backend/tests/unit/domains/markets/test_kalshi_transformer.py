@@ -143,3 +143,79 @@ class TestBuildKalshiEventContext:
         assert context["market_count"] == 2
         assert context["requires_selection"] is True
         assert len(context["markets"]) == 2
+
+
+def _build_market(**overrides):
+    """Helper: build a KalshiMarket with sensible defaults, override per test."""
+    from app.domains.markets.kalshi_schemas import KalshiMarket
+
+    defaults = dict(
+        ticker="TEST-MKT-1",
+        event_ticker="TEST-EVT",
+        title="Test event title",
+        subtitle="Test option",
+        status="active",
+        yes_bid=40,
+        yes_ask=42,
+        no_bid=58,
+        no_ask=60,
+        last_price=41,
+        volume=1000,
+        volume_24h=200,
+        open_interest=300,
+        close_time=None,
+    )
+    defaults.update(overrides)
+    return KalshiMarket(**defaults)
+
+
+def test_snapshot_includes_liquidity_field_mirroring_open_interest():
+    """OPEN INTEREST is shown in the frontend under the `liquidity` field
+    when venue=kalshi (per AnalysisResults.tsx → MarketCard mapping).
+    The transformer must emit `liquidity` so the frontend's
+    `market_snapshot.liquidity ?? 0` doesn't always evaluate to 0."""
+    from app.domains.markets.kalshi_transformer import build_kalshi_market_snapshot
+
+    market = _build_market(open_interest=300)
+    snapshot = build_kalshi_market_snapshot(market)
+
+    assert snapshot["liquidity"] == 300
+    assert snapshot["open_interest"] == 300
+
+
+def test_snapshot_liquidity_is_none_when_open_interest_missing():
+    """When Kalshi doesn't return open_interest, liquidity should be None
+    (not 0) so the frontend's `?? 0` fallback handles the display rather
+    than silently masking missing data as zero."""
+    from app.domains.markets.kalshi_transformer import build_kalshi_market_snapshot
+
+    market = _build_market(open_interest=None)
+    snapshot = build_kalshi_market_snapshot(market)
+
+    assert snapshot["liquidity"] is None
+    assert snapshot["open_interest"] is None
+
+
+def test_snapshot_preserves_other_existing_fields():
+    """Sanity: don't accidentally drop any of the other snapshot fields
+    when adding `liquidity`."""
+    from app.domains.markets.kalshi_transformer import build_kalshi_market_snapshot
+
+    market = _build_market(open_interest=500, volume=12345, volume_24h=678)
+    snapshot = build_kalshi_market_snapshot(market)
+
+    assert snapshot["ticker"] == "TEST-MKT-1"
+    assert snapshot["volume"] == 12345
+    assert snapshot["volume_24h"] == 678
+    assert snapshot["status"] == "active"
+
+
+def test_snapshot_includes_venue_kalshi():
+    """Snapshot must carry an explicit venue marker so downstream report
+    rendering (templates.py) can pick the right label + unit per venue."""
+    from app.domains.markets.kalshi_transformer import build_kalshi_market_snapshot
+
+    market = _build_market(open_interest=300)
+    snapshot = build_kalshi_market_snapshot(market)
+
+    assert snapshot["venue"] == "kalshi"

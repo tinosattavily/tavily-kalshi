@@ -107,6 +107,17 @@ def generate_fallback_report(
     if sl:
         execution_notes += f" Stop loss at {sl:.1%}."
 
+    # Venue-aware liquidity rendering. Kalshi exposes only `open_interest`
+    # (a contract count) under the `liquidity` alias because Kalshi's
+    # `liquidity_dollars` field is deprecated and returns 0. Polymarket
+    # exposes real USD-denominated liquidity (depth of book in USDC).
+    venue = market_snapshot.get("venue")
+    liquidity_val = market_snapshot.get("liquidity", 0)
+    if venue == "kalshi":
+        liquidity_line = f"- Open Interest: {liquidity_val:,.0f} contracts"
+    else:
+        liquidity_line = f"- Liquidity: {liquidity_val:,.0f} USDC"
+
     # Build markdown
     markdown = dedent(
         f"""
@@ -116,7 +127,7 @@ def generate_fallback_report(
         ## Market snapshot
         - Question: {market_snapshot.get("question", "N/A")}
         - Yes price: {market_snapshot.get("yes_price", 0):.2%}
-        - Liquidity: {market_snapshot.get("liquidity", 0):,.0f} USDC
+        {liquidity_line}
 
         ## Rationale
         {decision.get("notes", "Strategy placeholder.")}

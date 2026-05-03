@@ -189,6 +189,7 @@ def build_market_snapshot(
         }
 
     return {
+        "venue": "polymarket",
         "slug": slug,
         "url": market_url,
         "question": question,

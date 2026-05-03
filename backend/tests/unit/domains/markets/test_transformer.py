@@ -249,3 +249,21 @@ def test_build_market_snapshot_formatted_outcomes():
     assert len(snapshot["formatted_outcomes"]) == 2
     assert snapshot["formatted_outcomes"][0]["title"] == "Yes"
     assert snapshot["formatted_outcomes"][1]["title"] == "No"
+
+
+def test_build_market_snapshot_includes_venue_polymarket():
+    """Snapshot must carry an explicit venue marker so downstream report
+    rendering (templates.py) can pick the right label + unit per venue."""
+    market = {
+        "question": "Will this test pass?",
+        "outcomes": ["Yes", "No"],
+        "yes_index": 0,
+    }
+    market_url = "https://polymarket.com/market/test"
+    order_book = {}
+    state = {}
+    slug = "test-market"
+
+    snapshot = build_market_snapshot(market, market_url, order_book, state, slug)
+
+    assert snapshot["venue"] == "polymarket"
