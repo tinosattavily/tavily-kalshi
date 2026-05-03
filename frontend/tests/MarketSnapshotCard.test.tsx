@@ -6,6 +6,7 @@ import { MarketCard } from "../components/analysis/MarketCard";
 describe("MarketCard", () => {
   const defaultProps = {
     eventTitle: "Test Event",
+    venue: "kalshi" as const,
     marketUrl: "https://kalshi.com/markets/test",
     closesIn: "23 days",
     yesPrice: 0.5,
