@@ -23,7 +23,7 @@ function pickAction(signal: Signal): string {
 }
 
 function pickEdgePercent(signal: Signal): number | null {
-  if (typeof signal.edge_pct === "number") return Math.round(signal.edge_pct);
+  if (typeof signal.edge_pct === "number") return Math.round(signal.edge_pct * 100);
   if (typeof signal.model_prob === "number" && typeof signal.market_prob === "number") {
     return Math.round((signal.model_prob - signal.market_prob) * 100);
   }
