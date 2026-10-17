@@ -1,0 +1,3 @@
+# Optional Parallel Search MCP provider, including the standard backend dependencies.
+-r requirements.txt
+mcp>=1.27.0,<2

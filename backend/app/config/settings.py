@@ -33,6 +33,7 @@ class Settings:
 
     openai_api_key: Optional[str] = _get_env("OPENAI_API_KEY")
     tavily_api_key: Optional[str] = _get_env("TAVILY_API_KEY")
+    news_search_provider: str = (_get_env("NEWS_SEARCH_PROVIDER") or "tavily").lower()
     mongodb_uri: Optional[str] = _get_env("MONGODB_URI")
     # Redis configuration
     redis_url: Optional[str] = _get_env("REDIS_URL")

@@ -1,8 +1,8 @@
-"""Article fetcher agent - collects news via Tavily with fallback."""
+"""Article fetcher agent - collects news using the configured search provider."""
 
 from __future__ import annotations
 
-from app.config import get_logger
+from app.config import get_logger, settings
 from app.domains.news.fetcher import (
     deduplicate_articles,
     fetch_articles,
@@ -18,8 +18,8 @@ logger = get_logger(__name__)
 
 
 async def run_article_fetcher(state: AgentState) -> AgentState:
-    """Populate news_context using Tavily, with graceful fallback."""
-    if not TAVILY_API_KEY:
+    """Populate news_context using the selected provider, with graceful fallback."""
+    if settings.news_search_provider == "tavily" and not TAVILY_API_KEY:
         logger.error(
             "TAVILY_API_KEY is not configured - news agent cannot fetch articles",
             run_id=state.get("run_id"),
