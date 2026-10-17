@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from app.config import get_logger
+from app.config import get_logger, settings
 from app.domains.news.query_generator import TavilyQuerySpec
 from app.infrastructure.http.tavily import search_news
 
@@ -108,6 +108,13 @@ async def fetch_articles(
     all_articles: List[Dict[str, Any]] = []
     answers: List[str] = []
     query_results: List[Dict[str, Any]] = []
+    provider = settings.news_search_provider
+    if provider == "parallel":
+        from app.infrastructure.http.parallel import search_news as selected_search
+    elif provider == "tavily":
+        selected_search = search_news
+    else:
+        raise ValueError("NEWS_SEARCH_PROVIDER must be tavily or parallel")
 
     for spec in query_specs:
         query = spec["query"]
@@ -115,14 +122,16 @@ async def fetch_articles(
         max_results = max(5, min(12, max_results))
         search_depth = spec.get("search_depth", "basic")
 
-        if search_depth == "advanced":
+        if provider == "tavily" and search_depth == "advanced":
             logger.debug(
                 "search_depth=advanced requested, but Tavily API may not support it yet",
                 query=query,
             )
 
         try:
-            result = await search_news(query, max_results=max_results, search_depth=search_depth)
+            result = await selected_search(
+                query, max_results=max_results, search_depth=search_depth
+            )
             answer = result.get("answer")
             if isinstance(answer, str) and answer.strip():
                 answers.append(answer)
@@ -130,21 +139,24 @@ async def fetch_articles(
             articles = result.get("articles") or []
             if not articles:
                 logger.warning(
-                    "Tavily search returned no articles",
+                    "News search returned no articles",
+                    provider=provider,
                     query=query,
                     max_results=max_results,
                     has_answer=bool(answer),
                 )
             else:
                 logger.debug(
-                    "Tavily search successful",
+                    "News search successful",
+                    provider=provider,
                     query=query,
                     articles_count=len(articles),
                 )
             all_articles.extend(articles)
         except Exception as e:
             logger.error(
-                "Failed to search Tavily for query",
+                "Failed to search news for query",
+                provider=provider,
                 query=query,
                 error=str(e),
                 error_type=type(e).__name__,
